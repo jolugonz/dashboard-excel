@@ -2,28 +2,68 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Dashboard Excel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Métricas - Perfiles</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>Dashboard de Métricas</h1>
+      <p class="subtitle">Consulta de resultados por mes</p>
+    </header>
 
-  <h1>Dashboard</h1>
+    <!-- Sección de carga de archivo -->
+    <section class="upload-section">
+      <label for="excel-input" class="file-label">
+        <span class="file-icon">📁</span>
+        <span>Selecciona tu archivo Excel</span>
+        <input type="file" id="excel-input" accept=".xlsx, .xls" hidden>
+      </label>
+      <p class="file-info" id="file-info"></p>
+    </section>
 
-  <!-- El usuario selecciona su archivo Excel acá -->
-  <input type="file" id="excel-input" accept=".xlsx, .xls">
+    <!-- Controles de filtrado -->
+    <section class="controls-section" id="controls-section" style="display: none;">
+      <div class="filter-container">
+        <label for="month-filter">Filtrar por Mes:</label>
+        <select id="month-filter" class="month-select">
+          <option value="">-- Selecciona un mes --</option>
+        </select>
+      </div>
+      <button id="reset-filter" class="btn-secondary">Limpiar filtro</button>
+    </section>
 
-  <!-- Acá vamos a inyectar tablas y gráficos con JavaScript -->
-  <div id="dashboard-container"></div>
+    <!-- Área de resultados -->
+    <section class="results-section" id="results-section" style="display: none;">
+      <!-- Estadísticas -->
+      <div class="stats-grid" id="stats-grid">
+        <!-- Aquí se inyectarán dinámicamente las tarjetas de estadísticas -->
+      </div>
 
-  <!-- Librerías (deben ir ANTES que nuestros scripts) -->
+      <!-- Tabla de datos -->
+      <div class="table-container">
+        <h2>Resultados Detallados</h2>
+        <div class="table-wrapper" id="table-wrapper">
+          <!-- Aquí se inyectará la tabla -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Mensaje de error -->
+    <div id="error-message" class="error-message" style="display: none;"></div>
+  </div>
+
+  <!-- Librerías externas -->
   <script src="lib/xlsx.full.min.js"></script>
   <script src="lib/chart.umd.js"></script>
 
-  <!-- Nuestros módulos (el orden importa) -->
+  <!-- Nuestros módulos -->
   <script src="js/loader.js"></script>
   <script src="js/dataTransform.js"></script>
+  <script src="js/filters.js"></script>
   <script src="js/render.js"></script>
   <script src="js/main.js"></script>
-
 </body>
 </html>

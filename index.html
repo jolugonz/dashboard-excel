@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+cd /workspaces/dashboard-excel
+python3 -m http.server 8000http://localhost:8080<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -27,10 +28,12 @@
     <!-- Controles de filtrado -->
     <section class="controls-section" id="controls-section" style="display: none;">
       <div class="filter-container">
-        <label for="month-filter">Filtrar por Mes:</label>
-        <select id="month-filter" class="month-select">
-          <option value="">-- Selecciona un mes --</option>
-        </select>
+        <label for="date-start">Filtrar por fecha:</label>
+        <div class="date-range">
+          <input type="date" id="date-start" class="date-input">
+          <span>a</span>
+          <input type="date" id="date-end" class="date-input">
+        </div>
       </div>
       <button id="reset-filter" class="btn-secondary">Limpiar filtro</button>
     </section>

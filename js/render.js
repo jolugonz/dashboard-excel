@@ -36,19 +36,13 @@ function limpiarError() {
 
 function renderizarFiltroMeses(meses) {
   const controlsSection = document.getElementById("controls-section");
-  const monthFilter = document.getElementById("month-filter");
+  const startInput = document.getElementById("date-start");
+  const endInput = document.getElementById("date-end");
 
-  if (!monthFilter || !controlsSection) return;
+  if (!controlsSection || !startInput || !endInput) return;
 
-  monthFilter.innerHTML = '<option value="">-- Selecciona un mes --</option>';
-
-  meses.forEach((mes) => {
-    const option = document.createElement("option");
-    option.value = mes;
-    option.textContent = mes;
-    monthFilter.appendChild(option);
-  });
-
+  startInput.value = "";
+  endInput.value = "";
   controlsSection.style.display = meses.length > 0 ? "block" : "none";
 }
 

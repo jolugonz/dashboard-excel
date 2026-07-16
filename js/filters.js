@@ -72,6 +72,69 @@ function filtrarPorMes(filas, mesFiltro, nombreColumna) {
   });
 }
 
+function parsearFechaParaFiltro(valor) {
+  if (valor instanceof Date) {
+    return valor;
+  }
+
+  if (typeof valor === 'number' && !isNaN(valor)) {
+    return new Date(valor);
+  }
+
+  if (typeof valor !== 'string') {
+    return null;
+  }
+
+  const texto = valor.trim();
+  if (!texto) {
+    return null;
+  }
+
+  const fecha = new Date(texto);
+  if (!isNaN(fecha.getTime())) {
+    return fecha;
+  }
+
+  const coincidencia = texto.match(/^(\d{4})[-/](\d{2})/);
+  if (coincidencia) {
+    return new Date(`${coincidencia[1]}-${coincidencia[2]}-01T00:00:00`);
+  }
+
+  return null;
+}
+
+function filtrarPorRangoFechas(filas, fechaInicio, fechaFin, nombreColumna) {
+  if (!nombreColumna) {
+    return filas;
+  }
+
+  const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : null;
+  const fin = fechaFin ? new Date(`${fechaFin}T23:59:59`) : null;
+
+  return filas.filter((fila) => {
+    const valor = fila[nombreColumna];
+    if (valor === undefined || valor === null || valor === '') {
+      return false;
+    }
+
+    const fechaValor = parsearFechaParaFiltro(valor);
+    if (!fechaValor) {
+      return false;
+    }
+
+    const tiempoValor = fechaValor.getTime();
+    if (inicio && tiempoValor < inicio.getTime()) {
+      return false;
+    }
+
+    if (fin && tiempoValor > fin.getTime()) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 /**
  * Calcula estadísticas básicas de las columnas numéricas
  * @param {Object[]} filas - Array de filas

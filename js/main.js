@@ -20,9 +20,22 @@ let datosGlobales = {
 const inputExcel = document.getElementById("excel-input");
 inputExcel.addEventListener("change", cargarYProcesarExcel);
 
-// Escuchamos cambios en el filtro de mes
-const monthFilter = document.getElementById("month-filter");
-monthFilter.addEventListener("change", actualizarVista);
+// Escuchamos cambios en el rango de fechas
+const dateStart = document.getElementById("date-start");
+const dateEnd = document.getElementById("date-end");
+const resetFilter = document.getElementById("reset-filter");
+
+if (dateStart) {
+  dateStart.addEventListener("change", actualizarVista);
+}
+
+if (dateEnd) {
+  dateEnd.addEventListener("change", actualizarVista);
+}
+
+if (resetFilter) {
+  resetFilter.addEventListener("click", limpiarFiltroFechas);
+}
 
 // ============================================
 // FUNCIONES PRINCIPALES
@@ -59,7 +72,13 @@ async function cargarYProcesarExcel(evento) {
     // Mostrar nombre del archivo
     mostrarNombreArchivo(archivo.name);
 
-    // Renderizar filtro de meses
+    // Ocultar la sección de carga y mostrar los controles
+    const uploadSection = document.querySelector('.upload-section');
+    if (uploadSection) {
+      uploadSection.style.display = 'none';
+    }
+
+    // Renderizar filtro de fechas
     renderizarFiltroMeses(datosGlobales.meses);
 
     // Actualizar la vista inicial
@@ -76,39 +95,43 @@ async function cargarYProcesarExcel(evento) {
  * Actualiza la vista (tabla y métricas) según el mes seleccionado
  */
 function actualizarVista() {
-  const mesSeleccionado = monthFilter.value;
+  const fechaInicio = dateStart ? dateStart.value : "";
+  const fechaFin = dateEnd ? dateEnd.value : "";
 
-  // Filtrar datos según el mes
-  const filasFiltradasPorMes = filtrarPorMes(
+  const filasFiltradas = filtrarPorRangoFechas(
     datosGlobales.filas,
-    mesSeleccionado,
+    fechaInicio,
+    fechaFin,
     datosGlobales.columnaMes
   );
 
-  if (filasFiltradasPorMes.length === 0) {
-    mostrarError("No hay datos para el mes seleccionado");
+  if (filasFiltradas.length === 0) {
+    mostrarError("No hay datos para el rango de fechas seleccionado");
     return;
   }
 
   limpiarError();
 
-  // Calcular métricas
-  const metricas = calcularMetricas(
-    filasFiltradasPorMes,
-    datosGlobales.tipos
-  );
-
-  // Renderizar tabla
-  renderizarTabla(filasFiltradasPorMes, datosGlobales.columnas);
-
-  // Renderizar métricas
+  const metricas = calcularMetricas(filasFiltradas, datosGlobales.tipos);
+  renderizarTabla(filasFiltradas, datosGlobales.columnas);
   renderizarMetricas(metricas);
 
-  // Scroll suave a los resultados
   const controlsSection = document.getElementById("controls-section");
   if (controlsSection) {
     setTimeout(() => {
       controlsSection.scrollIntoView({ behavior: "smooth" });
     }, 100);
   }
+}
+
+function limpiarFiltroFechas() {
+  if (dateStart) {
+    dateStart.value = "";
+  }
+
+  if (dateEnd) {
+    dateEnd.value = "";
+  }
+
+  actualizarVista();
 }

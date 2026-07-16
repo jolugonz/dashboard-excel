@@ -77,3 +77,68 @@ function normalizarTabla(nombre, filas) {
     filas,
   };
 }
+
+/**
+ * Busca la hoja de perfiles dentro del libro Excel y devuelve sus filas.
+ * @param {Object} datosExcel - Objeto donde cada clave es el nombre de una hoja
+ * @returns {Object[]} - Filas de la tabla de perfiles
+ */
+function obtenerTablaPerfil(datosExcel) {
+  if (!datosExcel || typeof datosExcel !== "object") return [];
+
+  const nombresDeTablas = Object.keys(datosExcel);
+  if (nombresDeTablas.length === 0) return [];
+
+  const tablaPerfil = nombresDeTablas.find((nombre) => /perfil/i.test(nombre));
+
+  if (tablaPerfil) {
+    return Array.isArray(datosExcel[tablaPerfil]) ? datosExcel[tablaPerfil] : [];
+  }
+
+  for (const nombre of nombresDeTablas) {
+    const filas = datosExcel[nombre];
+    if (Array.isArray(filas) && filas.length > 0) {
+      return filas;
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Normaliza la tabla de perfiles para el dashboard.
+ * @param {Object[]} filas - Filas de la tabla de perfiles
+ * @returns {Object} - Datos listos para renderizar y filtrar
+ */
+function normalizarDatosPerfil(filas) {
+  if (!Array.isArray(filas) || filas.length === 0) {
+    return {
+      columnas: [],
+      filas: [],
+      meses: [],
+      tipos: {},
+      columnaMes: null,
+    };
+  }
+
+  const tablaNormalizada = normalizarTabla("perfiles", filas);
+  const columnas = tablaNormalizada.columnas;
+
+  let columnaMes = null;
+  for (const columna of columnas) {
+    if (esColumnaMes(filas, columna)) {
+      columnaMes = columna;
+      break;
+    }
+  }
+
+  const meses = columnaMes ? extraerMesesUnicos(filas, columnaMes) : [];
+
+  return {
+    columnas,
+    filas,
+    meses,
+    tipos: tablaNormalizada.tipos,
+    columnaMes,
+  };
+}

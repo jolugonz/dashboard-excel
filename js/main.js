@@ -8,6 +8,8 @@ let datosGlobales = {
   columnas: [],
   filas: [],
   meses: [],
+  tipos: {},
+  columnaMes: null,
 };
 
 // ============================================
@@ -50,6 +52,8 @@ async function cargarYProcesarExcel(evento) {
       columnas: datosNormalizados.columnas,
       filas: datosNormalizados.filas,
       meses: datosNormalizados.meses,
+      tipos: datosNormalizados.tipos,
+      columnaMes: datosNormalizados.columnaMes,
     };
 
     // Mostrar nombre del archivo
@@ -58,7 +62,7 @@ async function cargarYProcesarExcel(evento) {
     // Renderizar filtro de meses
     renderizarFiltroMeses(datosGlobales.meses);
 
-    // Mostrar todos los datos inicialmente
+    // Actualizar la vista inicial
     actualizarVista();
 
     console.log("✓ Datos cargados exitosamente", datosGlobales);
@@ -77,7 +81,8 @@ function actualizarVista() {
   // Filtrar datos según el mes
   const filasFiltradasPorMes = filtrarPorMes(
     datosGlobales.filas,
-    mesSeleccionado
+    mesSeleccionado,
+    datosGlobales.columnaMes
   );
 
   if (filasFiltradasPorMes.length === 0) {
@@ -90,7 +95,7 @@ function actualizarVista() {
   // Calcular métricas
   const metricas = calcularMetricas(
     filasFiltradasPorMes,
-    datosGlobales.columnas
+    datosGlobales.tipos
   );
 
   // Renderizar tabla
@@ -100,10 +105,10 @@ function actualizarVista() {
   renderizarMetricas(metricas);
 
   // Scroll suave a los resultados
-  const filtersSection = document.getElementById("filters-section");
-  if (filtersSection) {
+  const controlsSection = document.getElementById("controls-section");
+  if (controlsSection) {
     setTimeout(() => {
-      filtersSection.scrollIntoView({ behavior: "smooth" });
+      controlsSection.scrollIntoView({ behavior: "smooth" });
     }, 100);
   }
 }

@@ -57,12 +57,12 @@ function extraerMesesUnicos(filas, nombreColumna) {
 /**
  * Filtra las filas según el mes seleccionado
  * @param {Object[]} filas - Array de filas original
- * @param {string} nombreColumna - Nombre de la columna de mes
  * @param {string} mesFiltro - Mes seleccionado para filtrar
+ * @param {string|null} nombreColumna - Nombre de la columna de mes
  * @returns {Object[]} - Array de filas filtradas
  */
-function filtrarPorMes(filas, nombreColumna, mesFiltro) {
-  if (!mesFiltro || mesFiltro === '') {
+function filtrarPorMes(filas, mesFiltro, nombreColumna) {
+  if (!mesFiltro || mesFiltro === '' || !nombreColumna) {
     return filas;
   }
   
@@ -103,6 +103,17 @@ function calcularEstadisticas(filas, tipos) {
   });
   
   return estadisticas;
+}
+
+/**
+ * Calcula métricas de la tabla usando los tipos de columna.
+ * @param {Object[]} filas
+ * @param {Object} tipos
+ * @returns {Object[]}
+ */
+function calcularMetricas(filas, tipos) {
+  const estadisticas = calcularEstadisticas(filas, tipos);
+  return generarTarjetasEstadisticas(estadisticas, tipos, filas);
 }
 
 /**

@@ -139,16 +139,22 @@ function filtrarPorRangoFechas(filas, fechaInicio, fechaFin, nombreColumna) {
  * Calcula estadísticas básicas de las columnas numéricas
  * @param {Object[]} filas - Array de filas
  * @param {Object} tipos - Objeto con tipos de columnas
+ * @param {string[]} columnasObligatorias - Columnas que siempre deben procesarse
  * @returns {Object} - Estadísticas por columna
  */
-function calcularEstadisticas(filas, tipos) {
+function calcularEstadisticas(filas, tipos, columnasObligatorias = []) {
   const estadisticas = {};
   
   Object.keys(tipos).forEach(columna => {
     const nombreNormalizado = normalizarNombreColumna(columna);
-    // Considerar como numérica si el tipo detectado es 'numero' o
-    // si la columna tiene Productividad o NPS en su nombre
-    if (tipos[columna] === 'numero' || nombreNormalizado.includes('productividad') || nombreNormalizado.includes('nps')) {
+    
+    // Procesar si: es tipo 'numero' O es una columna obligatoria
+    const esObligatoria = columnasObligatorias.some(col => 
+      normalizarNombreColumna(col) === nombreNormalizado
+    );
+    const esNumerico = tipos[columna] === 'numero';
+    
+    if (esNumerico || esObligatoria) {
       const valores = filas
         .map(fila => parsearNumeroLocale(fila[columna]))
         .filter(v => !isNaN(v));
@@ -170,12 +176,15 @@ function calcularEstadisticas(filas, tipos) {
 
 /**
  * Calcula métricas de la tabla usando los tipos de columna.
+ * Asegura que Productividad y NPS siempre se incluyan
  * @param {Object[]} filas
  * @param {Object} tipos
  * @returns {Object[]}
  */
 function calcularMetricas(filas, tipos) {
-  const estadisticas = calcularEstadisticas(filas, tipos);
+  // Columnas que SIEMPRE queremos mostrar
+  const columnasObligatorias = ['Productividad', 'NPS'];
+  const estadisticas = calcularEstadisticas(filas, tipos, columnasObligatorias);
   return generarTarjetasEstadisticas(estadisticas, tipos, filas);
 }
 
@@ -213,17 +222,48 @@ function generarTarjetasEstadisticas(estadisticas, tipos, datosOriginales) {
     icono: '📊'
   });
   
-  // Tarjetas de estadísticas numéricas
-  Object.keys(estadisticas).forEach(columna => {
-    const stats = estadisticas[columna];
-    const nombreNormalizado = normalizarNombreColumna(columna);
-    let label = `Promedio - ${columna}`;
-    // Etiquetas específicas solicitadas
-    if (nombreNormalizado.includes('productividad')) {
-      label = 'Productividad - Evolución';
-    } else if (nombreNormalizado.includes('nps')) {
-      label = 'NPS - Evolución';
+  // Prioridad de columnas para mostrar primero
+  const columnasConPrioridad = ['Productividad', 'NPS'];
+  
+  // Procesar primero las columnas con prioridad
+  columnasConPrioridad.forEach(colPrioridad => {
+    const columnaEnEstadisticas = Object.keys(estadisticas).find(col => 
+      normalizarNombreColumna(col) === normalizarNombreColumna(colPrioridad)
+    );
+    
+    if (columnaEnEstadisticas && estadisticas[columnaEnEstadisticas]) {
+      const stats = estadisticas[columnaEnEstadisticas];
+      const nombreNormalizado = normalizarNombreColumna(columnaEnEstadisticas);
+      
+      let label = `Promedio - ${columnaEnEstadisticas}`;
+      if (nombreNormalizado.includes('productividad')) {
+        label = 'Productividad - Evolución';
+      } else if (nombreNormalizado.includes('nps')) {
+        label = 'NPS - Evolución';
+      }
+      
+      tarjetas.push({
+        tipo: 'numero',
+        columna: columnaEnEstadisticas,
+        label: label,
+        valor: formatearNumero(stats.promedio),
+        meta: `Mín: ${formatearNumero(stats.minimo)} | Máx: ${formatearNumero(stats.maximo)}`,
+        icono: '📈'
+      });
     }
+  });
+  
+  // Luego añadir el resto de estadísticas (excepto las ya añadidas)
+  Object.keys(estadisticas).forEach(columna => {
+    // Saltar si ya fue añadida en prioridad
+    if (columnasConPrioridad.some(col => 
+      normalizarNombreColumna(col) === normalizarNombreColumna(columna)
+    )) {
+      return;
+    }
+    
+    const stats = estadisticas[columna];
+    const label = `Promedio - ${columna}`;
 
     tarjetas.push({
       tipo: 'numero',

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Métricas — Perfiles</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <div>
+        <h1>Dashboard de Métricas</h1>
+        <p class="subtitle">Consulta de resultados por mes</p>
+      </div>
+      <span class="header-badge">Live</span>
+    </header>
+
+    <!-- Upload -->
+    <section class="upload-section">
+      <label for="excel-input" class="file-label">
+        <div class="upload-icon">📂</div>
+        <span>Selecciona tu archivo Excel</span>
+        <em>.xlsx · .xls</em>
+        <input type="file" id="excel-input" accept=".xlsx,.xls" hidden>
+      </label>
+      <p class="file-info" id="file-info"></p>
+    </section>
+
+    <!-- Controles -->
+    <section class="controls-section" id="controls-section" style="display: none;">
+      <div class="filter-container">
+        <label for="date-start">Filtrar por fecha</label>
+        <div class="date-range">
+          <input type="date" id="date-start" class="date-input">
+          <span>→</span>
+          <input type="date" id="date-end" class="date-input">
+        </div>
+      </div>
+      <button id="reset-filter" class="btn-secondary">Limpiar filtro</button>
+    </section>
+
+    <!-- Resultados -->
+    <section class="results-section" id="results-section" style="display: none;">
+      <div id="stats-grid"></div>
+    </section>
+
+    <!-- Error -->
+    <div id="error-message" class="error-message" style="display: none;"></div>
+
+  </div>
+
+  <!-- Librerías -->
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="lib/chart.umd.js"></script>
+
+  <!-- Módulos -->
+  <script src="js/loader.js"></script>
+  <script src="js/dataTransform.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

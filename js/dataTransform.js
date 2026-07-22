@@ -24,6 +24,64 @@ function obtenerColumnas(filas) {
   return Object.keys(filas[0]);
 }
 
+function normalizarNombreColumna(nombre) {
+  return String(nombre || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function parsearNumeroLocale(valor) {
+  if (valor === null || valor === undefined) return NaN;
+  if (typeof valor === 'number' && !isNaN(valor)) return valor;
+
+  let texto = String(valor).trim();
+  if (texto === '') return NaN;
+
+  texto = texto.replace(/\s/g, '');
+  texto = texto.replace(/[%€$₱¥£₹]/g, '');
+
+  const patrones = [
+    /^[+-]?(\d{1,3}(\.\d{3})+)(,\d+)?$/, // 1.234,56
+    /^[+-]?\d+(,\d+)?$/, // 1234,56 o 123456
+    /^[+-]?(\d{1,3}(,\d{3})+)(\.\d+)?$/, // 1,234.56
+    /^[+-]?\d+(\.\d+)?$/ // 1234.56 o 1234
+  ];
+
+  const tieneComa = texto.includes(',');
+  const tienePunto = texto.includes('.');
+
+  if (patrones[0].test(texto)) {
+    texto = texto.replace(/\./g, '').replace(/,/g, '.');
+  } else if (patrones[2].test(texto)) {
+    texto = texto.replace(/,/g, '');
+  } else if (patrones[3].test(texto)) {
+    // deja el punto decimal
+  } else if (patrones[1].test(texto)) {
+    texto = texto.replace(/,/g, '.');
+  } else {
+    return NaN;
+  }
+
+  const numero = parseFloat(texto);
+  return Number.isFinite(numero) ? numero : NaN;
+}
+
+function normalizarFilaKeys(fila) {
+  if (!fila || typeof fila !== 'object') return fila;
+  return Object.entries(fila).reduce((acc, [key, value]) => {
+    const nombreNormalizado = String(key || '')
+      .replace(/\uFEFF|\u200B|\u200C|\u200D/g, '')
+      .trim();
+
+    if (nombreNormalizado) {
+      acc[nombreNormalizado] = value;
+    }
+    return acc;
+  }, {});
+}
+
 /**
  * Detecta si una columna contiene principalmente números, fechas o texto.
  * @param {Object[]} filas - Array de filas
@@ -31,24 +89,47 @@ function obtenerColumnas(filas) {
  * @returns {"numero"|"fecha"|"texto"}
  */
 function detectarTipoColumna(filas, nombreColumna) {
-  // Buscamos la primera fila donde esta columna tenga un valor real
-  const filaConValor = filas.find(
-    (fila) => fila[nombreColumna] !== undefined && fila[nombreColumna] !== ""
-  );
+  // Revisar varias filas para decidir el tipo, no solo la primera
+  const valores = filas
+    .map(fila => fila[nombreColumna])
+    .filter(valor => valor !== undefined && valor !== null && valor !== "")
+    .slice(0, 5);
 
-  if (!filaConValor) return "texto";
+  if (valores.length === 0) return "texto";
 
-  const valor = filaConValor[nombreColumna];
+  let candidatoNumero = 0;
+  let candidatoFecha = 0;
+  let candidatoTexto = 0;
 
-  if (typeof valor === "number") {
+  valores.forEach((valor) => {
+    if (typeof valor === "number") {
+      candidatoNumero += 1;
+      return;
+    }
+
+    if (typeof valor === 'string') {
+      const numero = parsearNumeroLocale(valor);
+      if (!isNaN(numero)) {
+        candidatoNumero += 1;
+        return;
+      }
+    }
+
+    const posibleFecha = new Date(valor);
+    const esFechaValida = !isNaN(posibleFecha.getTime());
+    if (esFechaValida && typeof valor === "string" && valor.length > 4) {
+      candidatoFecha += 1;
+      return;
+    }
+
+    candidatoTexto += 1;
+  });
+
+  if (candidatoNumero >= candidatoFecha && candidatoNumero >= candidatoTexto) {
     return "numero";
   }
 
-  const posibleFecha = new Date(valor);
-  const esFechaValida = !isNaN(posibleFecha.getTime());
-
-  // Evitamos que un número corto tipo "5" o "2024" se confunda con fecha
-  if (esFechaValida && typeof valor === "string" && valor.length > 4) {
+  if (candidatoFecha > candidatoTexto) {
     return "fecha";
   }
 
@@ -92,7 +173,8 @@ function obtenerTablaPerfil(datosExcel) {
   const tablaPerfil = nombresDeTablas.find((nombre) => /perfil/i.test(nombre));
 
   if (tablaPerfil) {
-    return Array.isArray(datosExcel[tablaPerfil]) ? datosExcel[tablaPerfil] : [];
+    const filas = Array.isArray(datosExcel[tablaPerfil]) ? datosExcel[tablaPerfil] : [];
+    return filas.map(normalizarFilaKeys);
   }
 
   for (const nombre of nombresDeTablas) {

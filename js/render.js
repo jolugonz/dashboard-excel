@@ -278,7 +278,7 @@ function buildChartSection(metricas) {
   const ordenados = [];
 
   prioridad.forEach(pref => {
-    const found = num.find(x => x.columna && x.columna.toLowerCase() === pref);
+    const found = num.find(x => x.columna && normalizarNombreColumna(x.columna).includes(pref));
     if (found) ordenados.push(found);
   });
 

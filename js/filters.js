@@ -145,22 +145,12 @@ function calcularEstadisticas(filas, tipos) {
   const estadisticas = {};
   
   Object.keys(tipos).forEach(columna => {
+    const nombreNormalizado = normalizarNombreColumna(columna);
     // Considerar como numérica si el tipo detectado es 'numero' o
-    // si la columna es Productividad o NPS (puede venir formateada como string)
-    const nombreLower = columna.toLowerCase();
-    if (tipos[columna] === 'numero' || nombreLower === 'productividad' || nombreLower === 'nps') {
-      const parseLocaleNumber = (v) => {
-        if (v === null || v === undefined) return NaN;
-        if (typeof v === 'number' && !isNaN(v)) return v;
-        let s = String(v).trim();
-        if (!s) return NaN;
-        s = s.replace(/\s/g, '').replace(/\./g, '').replace(/,/g, '.');
-        const n = parseFloat(s);
-        return isNaN(n) ? NaN : n;
-      };
-
+    // si la columna tiene Productividad o NPS en su nombre
+    if (tipos[columna] === 'numero' || nombreNormalizado.includes('productividad') || nombreNormalizado.includes('nps')) {
       const valores = filas
-        .map(fila => parseLocaleNumber(fila[columna]))
+        .map(fila => parsearNumeroLocale(fila[columna]))
         .filter(v => !isNaN(v));
 
       if (valores.length > 0) {
@@ -226,11 +216,12 @@ function generarTarjetasEstadisticas(estadisticas, tipos, datosOriginales) {
   // Tarjetas de estadísticas numéricas
   Object.keys(estadisticas).forEach(columna => {
     const stats = estadisticas[columna];
+    const nombreNormalizado = normalizarNombreColumna(columna);
     let label = `Promedio - ${columna}`;
     // Etiquetas específicas solicitadas
-    if (columna.toLowerCase() === 'productividad') {
+    if (nombreNormalizado.includes('productividad')) {
       label = 'Productividad - Evolución';
-    } else if (columna.toLowerCase() === 'nps') {
+    } else if (nombreNormalizado.includes('nps')) {
       label = 'NPS - Evolución';
     }
 

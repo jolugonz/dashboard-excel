@@ -18,7 +18,6 @@ python3 -m http.server 8000http://localhost:8080<!DOCTYPE html>
     <!-- Sección de carga de archivo -->
     <section class="upload-section">
       <label for="excel-input" class="file-label">
-        <span class="file-icon">📁</span>
         <span>Selecciona tu archivo Excel</span>
         <input type="file" id="excel-input" accept=".xlsx, .xls" hidden>
       </label>
@@ -43,14 +42,6 @@ python3 -m http.server 8000http://localhost:8080<!DOCTYPE html>
       <!-- Estadísticas -->
       <div class="stats-grid" id="stats-grid">
         <!-- Aquí se inyectarán dinámicamente las tarjetas de estadísticas -->
-      </div>
-
-      <!-- Tabla de datos -->
-      <div class="table-container">
-        <h2>Resultados Detallados</h2>
-        <div class="table-wrapper" id="table-wrapper">
-          <!-- Aquí se inyectará la tabla -->
-        </div>
       </div>
     </section>
 

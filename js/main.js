@@ -113,7 +113,6 @@ function actualizarVista() {
   limpiarError();
 
   const metricas = calcularMetricas(filasFiltradas, datosGlobales.tipos);
-  renderizarTabla(filasFiltradas, datosGlobales.columnas);
   renderizarMetricas(metricas);
 
   const controlsSection = document.getElementById("controls-section");

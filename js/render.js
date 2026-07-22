@@ -46,41 +46,8 @@ function renderizarFiltroMeses(meses) {
   controlsSection.style.display = meses.length > 0 ? "block" : "none";
 }
 
-function renderizarTabla(filas, columnas) {
-  const tableWrapper = document.getElementById("table-wrapper");
-  const resultsSection = document.getElementById("results-section");
-
-  if (!tableWrapper || !resultsSection) return;
-
-  const table = document.createElement("table");
-  table.className = "results-table";
-
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  columnas.forEach((columna) => {
-    const th = document.createElement("th");
-    th.textContent = columna;
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-
-  const tbody = document.createElement("tbody");
-  filas.forEach((fila) => {
-    const row = document.createElement("tr");
-    columnas.forEach((columna) => {
-      const cell = document.createElement("td");
-      const valor = fila[columna];
-      cell.textContent = valor !== undefined && valor !== null ? valor : "";
-      row.appendChild(cell);
-    });
-    tbody.appendChild(row);
-  });
-
-  table.appendChild(thead);
-  table.appendChild(tbody);
-  tableWrapper.innerHTML = "";
-  tableWrapper.appendChild(table);
-  resultsSection.style.display = "block";
+function renderizarTabla() {
+  // eliminada: ya no se muestra la tabla de datos completa
 }
 
 function renderizarMetricas(metricas) {
@@ -94,7 +61,6 @@ function renderizarMetricas(metricas) {
     card.className = "stat-card";
 
     card.innerHTML = `
-      <div class="stat-card-icon">${metrica.icono || '📊'}</div>
       <div class="stat-card-body">
         <div class="stat-card-label">${metrica.label}</div>
         <div class="stat-card-value">${metrica.valor}</div>

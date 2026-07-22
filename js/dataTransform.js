@@ -121,7 +121,7 @@ function normalizarDatosPerfil(filas) {
     };
   }
 
-  const tablaNormalizada = normalizarTabla("perfiles", filas);
+  const tablaNormalizada = normalizarTabla("Perfiles", filas);
   const columnas = tablaNormalizada.columnas;
 
   let columnaMes = null;

@@ -63,7 +63,7 @@ body {
 }
 
 .header h1 {
-  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-size: clamp(1.0rem, 2.2vw, 1.4rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary);
@@ -187,6 +187,12 @@ body {
   align-items: center;
   gap: 8px;
 }
+
+/* Botones de filtro dinámicos */
+.filter-buttons { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+.filter-buttons .btn-filter { padding:6px 10px; background: rgba(255,255,255,0.03); border:1px solid var(--border); color:var(--text-primary); border-radius:8px; cursor:pointer; font-size:0.85rem }
+.filter-buttons .btn-filter:hover { background: rgba(0,194,255,0.06) }
+.filter-buttons .btn-filter.active { background: linear-gradient(90deg, rgba(0,194,255,0.14), rgba(167,139,250,0.06)); border-color: var(--border-accent); color: var(--cyan); box-shadow: var(--shadow-glow) }
 
 .date-range span {
   color: var(--text-muted);
@@ -458,10 +464,19 @@ body {
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 1.55rem;
+  font-size: clamp(1rem, 1.9vw, 1.55rem);
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: -0.04em;
+  max-width: 78%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Clase auxiliar para tamaños reducidos controlada desde JS */
+.gauge-value-overlay.small {
+  font-size: 1rem;
 }
 
 .gauge-range {

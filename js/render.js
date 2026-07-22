@@ -38,6 +38,18 @@ function limpiarError() {
   el.style.display = 'none';
 }
 
+// Normaliza cadenas numéricas con formato local (ej: "45.817,77")
+function parseLocaleNumber(v) {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number' && !isNaN(v)) return v;
+  let s = String(v).trim();
+  // eliminar espacios
+  s = s.replace(/\s/g, '');
+  // eliminar separador de miles (.) y convertir decimal (,) a punto
+  s = s.replace(/\./g, '').replace(/,/g, '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 function renderizarFiltroMeses(meses) {
   const ctrl  = document.getElementById('controls-section');
   const start = document.getElementById('date-start');
@@ -46,6 +58,61 @@ function renderizarFiltroMeses(meses) {
   start.value = '';
   end.value   = '';
   ctrl.style.display = meses.length > 0 ? 'flex' : 'none';
+}
+
+function renderizarFiltrosAdicionales() {
+  const ctrl = document.getElementById('controls-section');
+  if (!ctrl || !window.datosGlobales || !window.datosGlobales.filas) return;
+
+  // eliminar contenedor previo si existe
+  let container = document.getElementById('extra-filters');
+  if (container) container.remove();
+
+  container = document.createElement('div');
+  container.id = 'extra-filters';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.gap = '10px';
+  container.style.marginLeft = '12px';
+
+  // Proveedores
+  const proveedores = Array.from(new Set(window.datosGlobales.filas.map(f => f['Proveedor']).filter(Boolean))).slice(0,50);
+  const provWrap = document.createElement('div');
+  provWrap.className = 'filter-buttons';
+  const provLabel = document.createElement('div'); provLabel.textContent = 'Proveedor:'; provLabel.style.color = 'var(--text-secondary)'; provLabel.style.fontSize='0.78rem'; provLabel.style.fontWeight='700'; provLabel.style.marginBottom='6px';
+  provWrap.appendChild(provLabel);
+  proveedores.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-filter';
+    btn.textContent = p;
+    btn.dataset.value = p;
+    btn.addEventListener('click', () => {
+      if (typeof window.setFiltroProveedor === 'function') window.setFiltroProveedor(p);
+    });
+    provWrap.appendChild(btn);
+  });
+
+  // Negocio (PCRC)
+  const negocios = Array.from(new Set(window.datosGlobales.filas.map(f => f['Negocio']).filter(Boolean))).slice(0,50);
+  const negWrap = document.createElement('div');
+  negWrap.className = 'filter-buttons';
+  const negLabel = document.createElement('div'); negLabel.textContent = 'PCRC:'; negLabel.style.color='var(--text-secondary)'; negLabel.style.fontSize='0.78rem'; negLabel.style.fontWeight='700'; negLabel.style.marginBottom='6px';
+  negWrap.appendChild(negLabel);
+  negocios.forEach(n => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-filter';
+    btn.textContent = n;
+    btn.dataset.value = n;
+    btn.addEventListener('click', () => {
+      if (typeof window.setFiltroNegocio === 'function') window.setFiltroNegocio(n);
+    });
+    negWrap.appendChild(btn);
+  });
+
+  container.appendChild(provWrap);
+  container.appendChild(negWrap);
+
+  ctrl.appendChild(container);
 }
 
 /* ───────────────────────────────────────
@@ -133,9 +200,9 @@ function renderizarMetricas(metricas) {
   if (cardsNum.length > 0 && cardsNum.length <= 6) {
     const gaugeColors = ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a'];
     cardsNum.forEach((m, i) => {
-      const rawVal = parseFloat(String(m.valor).replace(/[,.]/g, '')) || 0;
-      const rawMin = m.meta ? parseFloat(m.meta.match(/Mín[:\s]*([\d.,]+)/)?.[1]) || 0 : 0;
-      const rawMax = m.meta ? parseFloat(m.meta.match(/Máx[:\s]*([\d.,]+)/)?.[1]) || Math.max(rawVal * 1.5, 100) : Math.max(rawVal * 1.5, 100);
+      const rawVal = parseLocaleNumber(m.valor) || 0;
+      const rawMin = m.meta ? parseLocaleNumber(m.meta.match(/Mín[:\s]*([\d.,]+)/)?.[1]) || 0 : 0;
+      const rawMax = m.meta ? parseLocaleNumber(m.meta.match(/Máx[:\s]*([\d.,]+)/)?.[1]) || Math.max(rawVal * 1.5, 100) : Math.max(rawVal * 1.5, 100);
       const col    = gaugeColors[i % gaugeColors.length];
 
       gaugeHtml += `
@@ -144,7 +211,7 @@ function renderizarMetricas(metricas) {
           <div class="stat-card-label">${m.columna}</div>
           <div class="gauge-wrap" id="gauge-wrap-${i}">
             ${buildGaugeSVG(rawVal, rawMin, rawMax, col)}
-            <div class="gauge-value-overlay" style="color:${col}">${m.valor}</div>
+            <div class="gauge-value-overlay" id="gauge-value-${i}" style="color:${col}">${m.valor}</div>
           </div>
           <div class="gauge-range">
             <span>${rawMin.toLocaleString('es-AR')}</span>
@@ -168,6 +235,35 @@ function renderizarMetricas(metricas) {
 
   // Inicializar charts después del render
   setTimeout(() => initCharts(metricas), 50);
+
+  // Ajustar tamaño del overlay si el texto es muy largo
+  setTimeout(() => {
+    const gaugeOverlays = document.querySelectorAll('.gauge-value-overlay');
+    gaugeOverlays.forEach(el => {
+      // si el ancho del contenido excede el contenedor, aplicar clase small
+      const parent = el.parentElement;
+      if (!parent) return;
+      const parentW = parent.getBoundingClientRect().width;
+      const textW = (() => {
+        const span = document.createElement('span');
+        span.style.visibility = 'hidden';
+        span.style.whiteSpace = 'nowrap';
+        span.style.fontWeight = getComputedStyle(el).fontWeight;
+        span.style.fontSize = getComputedStyle(el).fontSize;
+        span.textContent = el.textContent || '';
+        document.body.appendChild(span);
+        const w = span.getBoundingClientRect().width;
+        document.body.removeChild(span);
+        return w;
+      })();
+
+      if (textW > parentW * 0.78) {
+        el.classList.add('small');
+      } else {
+        el.classList.remove('small');
+      }
+    });
+  }, 120);
 }
 
 /* ───────────────────────────────────────
@@ -177,14 +273,28 @@ function buildChartSection(metricas) {
   const num = metricas.filter(m => m.tipo === 'numero');
   if (num.length === 0) return '';
 
-  // Construir placeholders de canvas; los datos reales vienen de datosGlobales
+  // Queremos priorizar Productividad y NPS como los dos primeros charts
+  const prioridad = ['productividad', 'nps'];
+  const ordenados = [];
+
+  prioridad.forEach(pref => {
+    const found = num.find(x => x.columna && x.columna.toLowerCase() === pref);
+    if (found) ordenados.push(found);
+  });
+
+  // añadir el resto sin repetir
+  num.forEach(m => {
+    if (!ordenados.includes(m)) ordenados.push(m);
+  });
+
+  // Construir placeholders de canvas; los datos reales vendrán de datosGlobales
   let cardsHtml = '';
-  num.slice(0, 3).forEach((m, i) => {
+  ordenados.slice(0, 3).forEach((m, i) => {
     cardsHtml += `
       <div class="chart-card">
-        <div class="chart-title">${m.label} — evolución</div>
+        <div class="chart-title">${m.label}</div>
         <div class="chart-canvas-wrap">
-          <canvas id="chart-${i}"></canvas>
+          <canvas id="chart-${i}" data-columna="${m.columna}"></canvas>
         </div>
       </div>`;
   });
@@ -194,30 +304,70 @@ function buildChartSection(metricas) {
 
 function initCharts(metricas) {
   if (typeof Chart === 'undefined') return;
-
-  // Si no hay datos globales de series temporales, generamos muestra ilustrativa
-  const num = metricas.filter(m => m.tipo === 'numero');
+  // Construir series reales basadas en datosGlobales si están disponibles
   const chartColors = ['#00c2ff', '#00d68f', '#a78bfa'];
 
-  num.slice(0, 3).forEach((m, i) => {
+  for (let i = 0; i < 3; i++) {
     const canvas = document.getElementById(`chart-${i}`);
-    if (!canvas) return;
+    if (!canvas) continue;
 
     _destroyChart(`chart-${i}`);
 
-    // Recuperar el valor central
-    const centerVal = parseFloat(String(m.valor).replace(/[,.]/g, '').replace(',', '.')) || 0;
-    const rawMin = m.meta ? parseFloat(m.meta.match(/Mín[:\s]*([\d.,]+)/)?.[1]) || 0 : 0;
-    const rawMax = m.meta ? parseFloat(m.meta.match(/Máx[:\s]*([\d.,]+)/)?.[1]) || centerVal * 1.5 : centerVal * 1.5;
+    const columna = canvas.dataset.columna;
+    // Si no hay columna, intentar tomar del metricas en orden
+    let colName = columna || (metricas.filter(m => m.tipo === 'numero')[i] || {}).columna;
+    if (!colName) continue;
 
-    // Generar serie sintética alrededor del valor real para mostrar tendencia
-    const labels = ['Ene','Feb','Mar','Abr','May','Jun'];
-    const spread = (rawMax - rawMin) * 0.25 || centerVal * 0.15;
-    const data   = labels.map((_, j) =>
-      j === labels.length - 1
-        ? centerVal
-        : centerVal + (Math.random() - 0.5) * spread
-    );
+    // Construir labels basados en la columna de mes real (normalizando seriales de Excel y strings)
+    const filasGlobal = (window.datosGlobales && window.datosGlobales.filas) || [];
+    const columnaMes = window.datosGlobales ? window.datosGlobales.columnaMes : null;
+
+    function excelSerialToDate(serial) {
+      // serial puede incluir parte decimal (hora)
+      const days = Number(serial);
+      if (isNaN(days)) return null;
+      const utc = Math.round((days - 25569) * 86400 * 1000);
+      return new Date(utc);
+    }
+
+    function toMonthKey(valor) {
+      if (valor === undefined || valor === null) return null;
+      // si es número (serial), convertir
+      if (typeof valor === 'number' || /^\d+$/.test(String(valor).trim())) {
+        const d = excelSerialToDate(Number(valor));
+        if (d && !isNaN(d.getTime())) return d.toISOString().slice(0,7);
+      }
+      // intentar parsear como fecha string
+      const maybe = new Date(String(valor));
+      if (!isNaN(maybe.getTime())) return maybe.toISOString().slice(0,7);
+      // fallback: usar el string literal
+      return String(valor).trim();
+    }
+
+    function formatMonthLabel(key) {
+      // si es YYYY-MM
+      if (/^\d{4}-\d{2}$/.test(key)) {
+        const d = new Date(key + '-01T00:00:00');
+        return d.toLocaleString('es-AR', { month: 'short', year: 'numeric' });
+      }
+      return key;
+    }
+
+    // extraer claves únicas ordenadas
+    const mesesClaves = Array.from(new Set(filasGlobal.map(r => toMonthKey(r[columnaMes])).filter(Boolean)));
+    mesesClaves.sort((a,b) => a.localeCompare(b));
+
+    const labels = mesesClaves.map(formatMonthLabel);
+
+    // Calcular promedio por cada clave (mes)
+    const data = mesesClaves.map(key => {
+      if (!columnaMes) return 0;
+      const filas = filasGlobal.filter(f => toMonthKey(f[columnaMes]) === key);
+      const vals = filas.map(r => parseLocaleNumber(r[colName]) || 0).filter(n => !isNaN(n));
+      if (vals.length === 0) return 0;
+      const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+      return avg;
+    });
 
     const col = chartColors[i % chartColors.length];
 
@@ -228,14 +378,12 @@ function initCharts(metricas) {
         datasets: [{
           data,
           borderColor: col,
-          backgroundColor: i === 0
-            ? `${col}55`
-            : function(ctx) {
-                const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 160);
-                gradient.addColorStop(0, `${col}44`);
-                gradient.addColorStop(1, `${col}00`);
-                return gradient;
-              },
+          backgroundColor: i === 0 ? `${col}55` : function(ctx){
+            const gradient = ctx.chart.ctx.createLinearGradient(0,0,0,160);
+            gradient.addColorStop(0, `${col}44`);
+            gradient.addColorStop(1, `${col}00`);
+            return gradient;
+          },
           borderWidth: 2,
           borderRadius: i === 0 ? 6 : 0,
           fill: i !== 0,
@@ -249,16 +397,10 @@ function initCharts(metricas) {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: {
-            grid:  { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: '#8ba3cc', font: { size: 10 } }
-          },
-          y: {
-            grid:  { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: '#8ba3cc', font: { size: 10 } }
-          }
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } }
         }
       }
     });
-  });
+  }
 }

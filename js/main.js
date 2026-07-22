@@ -12,6 +12,33 @@ let datosGlobales = {
   columnaMes: null,
 };
 
+// estado de filtros adicionales
+let filtrosActivos = { proveedor: null, negocio: null };
+
+window.setFiltroProveedor = function(valor) {
+  filtrosActivos.proveedor = valor === filtrosActivos.proveedor ? null : valor;
+  actualizarVista();
+  actualizarBotonesFiltro();
+};
+
+window.setFiltroNegocio = function(valor) {
+  filtrosActivos.negocio = valor === filtrosActivos.negocio ? null : valor;
+  actualizarVista();
+  actualizarBotonesFiltro();
+};
+
+function actualizarBotonesFiltro() {
+  const btns = document.querySelectorAll('.btn-filter');
+  btns.forEach(b => {
+    const v = b.dataset.value;
+    if (v === filtrosActivos.proveedor || v === filtrosActivos.negocio) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+}
+
 // ============================================
 // EVENT LISTENERS
 // ============================================
@@ -68,6 +95,8 @@ async function cargarYProcesarExcel(evento) {
       tipos: datosNormalizados.tipos,
       columnaMes: datosNormalizados.columnaMes,
     };
+    // Exponer en window para que render.js pueda usar los datos
+    window.datosGlobales = datosGlobales;
 
     // Mostrar nombre del archivo
     mostrarNombreArchivo(archivo.name);
@@ -80,6 +109,8 @@ async function cargarYProcesarExcel(evento) {
 
     // Renderizar filtro de fechas
     renderizarFiltroMeses(datosGlobales.meses);
+    // Renderizar filtros adicionales (Proveedor / Negocio)
+    if (typeof renderizarFiltrosAdicionales === 'function') renderizarFiltrosAdicionales();
 
     // Actualizar la vista inicial
     actualizarVista();
@@ -105,14 +136,23 @@ function actualizarVista() {
     datosGlobales.columnaMes
   );
 
-  if (filasFiltradas.length === 0) {
-    mostrarError("No hay datos para el rango de fechas seleccionado");
+  // Aplicar filtros adicionales si existen
+  let filasFiltradas2 = filasFiltradas;
+  if (filtrosActivos.proveedor) {
+    filasFiltradas2 = filasFiltradas2.filter(f => String(f['Proveedor'] || '').trim() === String(filtrosActivos.proveedor).trim());
+  }
+  if (filtrosActivos.negocio) {
+    filasFiltradas2 = filasFiltradas2.filter(f => String(f['Negocio'] || '').trim() === String(filtrosActivos.negocio).trim());
+  }
+
+  if (filasFiltradas2.length === 0) {
+    mostrarError("No hay datos para el rango de fechas seleccionado / filtro activo");
     return;
   }
 
   limpiarError();
 
-  const metricas = calcularMetricas(filasFiltradas, datosGlobales.tipos);
+  const metricas = calcularMetricas(filasFiltradas2, datosGlobales.tipos);
   renderizarMetricas(metricas);
 
   const controlsSection = document.getElementById("controls-section");

@@ -14,11 +14,7 @@
 
     <!-- Header -->
     <header class="header">
-      <div>
-        <h1>Dashboard de Métricas</h1>
-        <p class="subtitle">Consulta de resultados por mes</p>
-      </div>
-      <span class="header-badge">Live</span>
+      <h1>Dashboard de Métricas</h1>
     </header>
 
     <!-- Upload -->
@@ -38,12 +34,25 @@
         <div class="filter-container">
           <label for="date-start">Filtrar por fecha</label>
           <div class="date-range">
-            <input type="date" id="date-start" class="date-input">
+            <input type="month" id="date-start" class="date-input">
             <span>→</span>
-            <input type="date" id="date-end" class="date-input">
+            <input type="month" id="date-end" class="date-input">
           </div>
         </div>
-        <button id="reset-filter" class="btn-secondary">Limpiar filtro</button>
+        <div class="controls-actions">
+          <button
+            id="download-pdf"
+            class="btn-icon"
+            type="button"
+            aria-label="Descargar informe en PDF"
+            data-tooltip="Descargar informe en PDF"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/>
+            </svg>
+          </button>
+          <button id="reset-filter" class="btn-secondary">Limpiar filtro</button>
+        </div>
       </div>
     </section>
 

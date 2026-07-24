@@ -140,8 +140,19 @@ function filtrarPorRangoFechas(filas, fechaInicio, fechaFin, nombreColumna) {
     return filas;
   }
 
-  const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : null;
-  const fin = fechaFin ? new Date(`${fechaFin}T23:59:59`) : null;
+  const crearLimiteMes = (valor, esFin) => {
+    if (!valor) return null;
+    const coincidencia = String(valor).match(/^(\d{4})-(\d{2})/);
+    if (!coincidencia) return null;
+    const anio = Number(coincidencia[1]);
+    const mes = Number(coincidencia[2]);
+    return esFin
+      ? new Date(anio, mes, 0, 23, 59, 59, 999)
+      : new Date(anio, mes - 1, 1, 0, 0, 0, 0);
+  };
+
+  const inicio = crearLimiteMes(fechaInicio, false);
+  const fin = crearLimiteMes(fechaFin, true);
 
   return filas.filter((fila) => {
     const valor = fila[nombreColumna];

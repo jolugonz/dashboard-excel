@@ -55,6 +55,7 @@ inputExcel.addEventListener("change", cargarYProcesarExcel);
 const dateStart = document.getElementById("date-start");
 const dateEnd = document.getElementById("date-end");
 const resetFilter = document.getElementById("reset-filter");
+const downloadPdf = document.getElementById("download-pdf");
 
 if (dateStart) {
   dateStart.addEventListener("change", actualizarVista);
@@ -66,6 +67,12 @@ if (dateEnd) {
 
 if (resetFilter) {
   resetFilter.addEventListener("click", limpiarFiltroFechas);
+}
+
+if (downloadPdf) {
+  downloadPdf.addEventListener("click", () => {
+    window.print();
+  });
 }
 
 // ============================================

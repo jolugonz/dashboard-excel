@@ -5,12 +5,54 @@
 /* ── Instancias activas de Chart.js ── */
 let _charts = {};
 
+// Un canvas transparente se compone sobre blanco al generar un PDF, aunque su
+// contenedor sea oscuro. Dibujar el fondo dentro del propio bitmap conserva la
+// paleta de los gráficos tanto en pantalla como en la exportación.
+if (typeof Chart !== 'undefined') {
+  Chart.register({
+    id: 'dashboardCanvasBackground',
+    beforeDraw(chart) {
+      const { ctx, width, height } = chart;
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#112255';
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+  });
+}
+
 function _destroyChart(id) {
   if (_charts[id]) {
     _charts[id].destroy();
     delete _charts[id];
   }
 }
+
+// Chart.js conserva el tamaño calculado para pantalla. Al entrar o salir del
+// modo impresión hay que recalcular cada canvas con las dimensiones del PDF.
+window.addEventListener('beforeprint', () => {
+  Object.entries(_charts).forEach(([id, chart]) => {
+    const contenedor = chart.canvas.parentElement;
+    if (!contenedor) return;
+    if (id === 'profiles-chart' && chart.$printLabels) {
+      chart.data.labels = chart.$printLabels;
+    }
+    const altura = id === 'profiles-chart' ? 470 : 210;
+    chart.resize(contenedor.clientWidth, altura);
+    chart.update('none');
+  });
+});
+
+window.addEventListener('afterprint', () => {
+  Object.entries(_charts).forEach(([id, chart]) => {
+    if (id === 'profiles-chart' && chart.$screenLabels) {
+      chart.data.labels = chart.$screenLabels;
+    }
+    chart.resize();
+    chart.update('none');
+  });
+});
 
 /* ───────────────────────────────────────
    Helpers
@@ -64,8 +106,7 @@ function renderizarFiltroMeses(meses) {
   if (fechas.length > 0) {
     const aValorInput = fecha => [
       fecha.getFullYear(),
-      String(fecha.getMonth() + 1).padStart(2, '0'),
-      String(fecha.getDate()).padStart(2, '0')
+      String(fecha.getMonth() + 1).padStart(2, '0')
     ].join('-');
     const minimo = aValorInput(fechas[0]);
     const maximo = aValorInput(fechas[fechas.length - 1]);
@@ -202,24 +243,52 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
       </div>`;
   }
 
-  cardsNum.forEach((m, i) => {
-    const colors   = ['var(--green)', 'var(--purple)', 'var(--yellow)', 'var(--red)', 'var(--cyan)'];
-    const accents  = ['--green', '--purple', '--yellow', '--red', '--cyan'];
-    const col      = colors[i % colors.length];
-    const acc      = accents[i % accents.length];
-
-    // extraer min/max del meta string si existe
-    let metaHtml = '';
-    if (m.meta) {
-      const parts = m.meta.split('|');
-      metaHtml = `<div class="kpi-sub">${parts.map(p => p.trim()).join(' &nbsp;·&nbsp; ')}</div>`;
+  const columnasFiltradas = Array.from(new Set(
+    filasFiltradas.flatMap(fila => Object.keys(fila || {}))
+  ));
+  const buscarColumna = nombres => columnasFiltradas.find(columna =>
+    nombres.some(nombre =>
+      normalizarNombreColumna(columna) === normalizarNombreColumna(nombre)
+    )
+  );
+  const columnaMuestras = buscarColumna(['Muestra', 'Muestras']);
+  const columnaPerfil = columnasFiltradas.find(columna =>
+    normalizarNombreColumna(columna).includes('afunilamento')
+  );
+  const totalMuestras = columnaMuestras
+    ? filasFiltradas.reduce((total, fila) => {
+        const valor = parsearNumeroLocale(fila[columnaMuestras]);
+        return total + (isNaN(valor) ? 0 : valor);
+      }, 0)
+    : 0;
+  const totalCriticos = columnaPerfil
+    ? filasFiltradas.filter(fila =>
+        normalizarNombreColumna(fila[columnaPerfil]) === 'criticos'
+      ).length
+    : 0;
+  const indicadoresResumen = [
+    {
+      label: 'Total Muestras',
+      valor: totalMuestras,
+      detalle: 'muestras en el período',
+      color: 'var(--green)'
+    },
+    {
+      label: 'Total Críticos',
+      valor: totalCriticos,
+      detalle: 'apariciones en Afunilamento Group',
+      color: 'var(--purple)'
     }
+  ];
 
+  indicadoresResumen.forEach(indicador => {
     stripHtml += `
-      <div class="kpi-card" style="--accent-bar:${col}">
-        <div class="kpi-label">${m.label}</div>
-        <div class="kpi-value" style="color:${col}">${m.valor}</div>
-        ${metaHtml}
+      <div class="kpi-card" style="--accent-bar:${indicador.color}">
+        <div class="kpi-label">${indicador.label}</div>
+        <div class="kpi-value" style="color:${indicador.color}">
+          ${indicador.valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })}
+        </div>
+        <div class="kpi-sub">${indicador.detalle}</div>
       </div>`;
   });
 
@@ -464,6 +533,9 @@ function initCharts(metricas, filasFiltradas = []) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { left: 8, right: 16, top: 4, bottom: 12 }
+        },
         plugins: { legend: { display: false } },
         scales: {
           x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } },
@@ -512,6 +584,22 @@ function initProfilesChart(filasFiltradas = []) {
   })).sort((a, b) => b.cantidad - a.cantidad);
 
   const labels = ordenados.map(item => `${item.perfil} (${item.cantidad})`);
+  const printLabels = ordenados.map(item => {
+    const texto = item.perfil;
+    if (texto.length <= 24) return `${texto} (${item.cantidad})`;
+
+    const palabras = texto.split(/\s+/);
+    let primeraLinea = '';
+    let segundaLinea = '';
+    palabras.forEach(palabra => {
+      if (!segundaLinea && `${primeraLinea} ${palabra}`.trim().length <= 24) {
+        primeraLinea = `${primeraLinea} ${palabra}`.trim();
+      } else {
+        segundaLinea = `${segundaLinea} ${palabra}`.trim();
+      }
+    });
+    return [primeraLinea, `${segundaLinea} (${item.cantidad})`.trim()];
+  });
   const data = ordenados.map(item => item.cantidad);
   const colores = ordenados.map((_, i) =>
     ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a'][i % 5]
@@ -534,6 +622,9 @@ function initProfilesChart(filasFiltradas = []) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: { left: 14, right: 20, top: 4, bottom: 12 }
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -562,6 +653,8 @@ function initProfilesChart(filasFiltradas = []) {
       }
     }
   });
+  _charts['profiles-chart'].$screenLabels = labels;
+  _charts['profiles-chart'].$printLabels = printLabels;
 }
 
 function initQuartileCharts(filasFiltradas = []) {
@@ -640,7 +733,7 @@ function initQuartileCharts(filasFiltradas = []) {
       borderColor: colores[cuartil],
       backgroundColor: colores[cuartil],
       borderWidth: 2,
-      tension: 0.3,
+      tension: 0.4,
       pointRadius: 3,
       pointHoverRadius: 5,
       spanGaps: true
@@ -655,6 +748,9 @@ function initQuartileCharts(filasFiltradas = []) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { left: 10, right: 16, top: 4, bottom: 12 }
+        },
         interaction: { mode: 'nearest', intersect: false },
         plugins: {
           legend: {
@@ -682,9 +778,7 @@ function initQuartileCharts(filasFiltradas = []) {
             grid: { color: 'rgba(255,255,255,0.04)' },
             ticks: {
               color: '#8ba3cc',
-              font: { size: 9 },
-              autoSkip: true,
-              maxTicksLimit: 7
+              font: { size: 9 }
             }
           },
           y: {

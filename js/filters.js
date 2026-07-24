@@ -74,11 +74,23 @@ function filtrarPorMes(filas, mesFiltro, nombreColumna) {
 
 function parsearFechaParaFiltro(valor) {
   if (valor instanceof Date) {
-    return valor;
+    return isNaN(valor.getTime()) ? null : valor;
   }
 
-  if (typeof valor === 'number' && !isNaN(valor)) {
-    return new Date(valor);
+  // Excel guarda normalmente las fechas como la cantidad de días transcurridos
+  // desde 1899-12-30. new Date(45505) interpretaría ese valor como milisegundos
+  // de 1970, por lo que todos los registros quedarían fuera del filtro.
+  if (typeof valor === 'number' && Number.isFinite(valor)) {
+    const milisegundos = Math.round((valor - 25569) * 86400000);
+    const fechaUtc = new Date(milisegundos);
+    if (isNaN(fechaUtc.getTime())) return null;
+
+    // Devolver medianoche local para compararla con los inputs type="date".
+    return new Date(
+      fechaUtc.getUTCFullYear(),
+      fechaUtc.getUTCMonth(),
+      fechaUtc.getUTCDate()
+    );
   }
 
   if (typeof valor !== 'string') {
@@ -90,14 +102,34 @@ function parsearFechaParaFiltro(valor) {
     return null;
   }
 
+  // También puede llegar un serial de Excel convertido a texto.
+  if (/^\d+(?:\.\d+)?$/.test(texto)) {
+    return parsearFechaParaFiltro(Number(texto));
+  }
+
+  // Formato ISO completo o mensual: YYYY-MM-DD / YYYY-MM.
+  let coincidencia = texto.match(/^(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?/);
+  if (coincidencia) {
+    return new Date(
+      Number(coincidencia[1]),
+      Number(coincidencia[2]) - 1,
+      Number(coincidencia[3] || 1)
+    );
+  }
+
+  // Formato habitual en archivos en español: DD/MM/YYYY.
+  coincidencia = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (coincidencia) {
+    return new Date(
+      Number(coincidencia[3]),
+      Number(coincidencia[2]) - 1,
+      Number(coincidencia[1])
+    );
+  }
+
   const fecha = new Date(texto);
   if (!isNaN(fecha.getTime())) {
     return fecha;
-  }
-
-  const coincidencia = texto.match(/^(\d{4})[-/](\d{2})/);
-  if (coincidencia) {
-    return new Date(`${coincidencia[1]}-${coincidencia[2]}-01T00:00:00`);
   }
 
   return null;
@@ -182,9 +214,20 @@ function calcularEstadisticas(filas, tipos, columnasObligatorias = []) {
  * @returns {Object[]}
  */
 function calcularMetricas(filas, tipos) {
-  // Columnas que SIEMPRE queremos mostrar
-  const columnasObligatorias = ['Productividad', 'NPS'];
-  const estadisticas = calcularEstadisticas(filas, tipos, columnasObligatorias);
+  // El dashboard debe resumir únicamente estas métricas. Mes e ID pueden ser
+  // numéricos en Excel, pero no son indicadores cuyo promedio tenga sentido.
+  const columnasMetricas = ['Productividad', 'NPS'];
+  const tiposMetricas = Object.keys(tipos).reduce((resultado, columna) => {
+    const esMetrica = columnasMetricas.some(
+      metrica => normalizarNombreColumna(metrica) === normalizarNombreColumna(columna)
+    );
+    if (esMetrica) {
+      resultado[columna] = tipos[columna];
+    }
+    return resultado;
+  }, {});
+
+  const estadisticas = calcularEstadisticas(filas, tiposMetricas, columnasMetricas);
   return generarTarjetasEstadisticas(estadisticas, tipos, filas);
 }
 

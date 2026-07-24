@@ -31,7 +31,11 @@ function actualizarBotonesFiltro() {
   const btns = document.querySelectorAll('.btn-filter');
   btns.forEach(b => {
     const v = b.dataset.value;
-    if (v === filtrosActivos.proveedor || v === filtrosActivos.negocio) {
+    const activo = b.dataset.filter === 'proveedor'
+      ? v === filtrosActivos.proveedor
+      : v === filtrosActivos.negocio;
+    b.setAttribute('aria-pressed', String(activo));
+    if (activo) {
       b.classList.add('active');
     } else {
       b.classList.remove('active');
@@ -153,7 +157,7 @@ function actualizarVista() {
   limpiarError();
 
   const metricas = calcularMetricas(filasFiltradas2, datosGlobales.tipos);
-  renderizarMetricas(metricas);
+  renderizarMetricas(metricas, filasFiltradas2);
 
   const controlsSection = document.getElementById("controls-section");
   if (controlsSection) {

@@ -156,14 +156,21 @@ body {
    ======================================== */
 .controls-section {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 16px;
   padding: 18px 24px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   margin-bottom: 24px;
+}
+
+.controls-top {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 16px;
 }
 
 .filter-container {
@@ -189,10 +196,50 @@ body {
 }
 
 /* Botones de filtro dinámicos */
-.filter-buttons { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
-.filter-buttons .btn-filter { padding:6px 10px; background: rgba(255,255,255,0.03); border:1px solid var(--border); color:var(--text-primary); border-radius:8px; cursor:pointer; font-size:0.85rem }
-.filter-buttons .btn-filter:hover { background: rgba(0,194,255,0.06) }
-.filter-buttons .btn-filter.active { background: linear-gradient(90deg, rgba(0,194,255,0.14), rgba(167,139,250,0.06)); border-color: var(--border-accent); color: var(--cyan); box-shadow: var(--shadow-glow) }
+#extra-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow-x: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.filter-buttons-pcrc {
+  margin-left: auto;
+}
+
+.filter-buttons .btn-filter {
+  padding: 7px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: color 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-buttons .btn-filter:hover {
+  background: rgba(0,194,255,0.09);
+  border-color: rgba(0,194,255,0.45);
+}
+
+.filter-buttons .btn-filter.active {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #06142f;
+  box-shadow: 0 0 16px rgba(0,194,255,0.3);
+}
 
 .date-range span {
   color: var(--text-muted);
@@ -496,12 +543,72 @@ body {
   margin-bottom: 20px;
 }
 
+.visual-dashboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+.visual-dashboard-right {
+  grid-column: 2 / 4;
+  min-width: 0;
+}
+
+.visual-gauges {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.visual-dashboard-right .charts-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.perfiles-chart-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-subtitle {
+  margin: -10px 0 14px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.profile-chart-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 360px;
+}
+
 .chart-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   padding: 20px;
   box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+
+.chart-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--cyan), var(--purple));
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+.chart-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.55);
 }
 
 .chart-title {
@@ -539,6 +646,9 @@ body {
 @media (max-width: 900px) {
   .charts-row { grid-template-columns: 1fr; }
   .kpi-strip  { grid-template-columns: repeat(2, 1fr); }
+  .visual-dashboard { grid-template-columns: 1fr; }
+  .visual-dashboard-right { grid-column: auto; }
+  .profile-chart-wrap { min-height: 340px; }
 }
 
 @media (max-width: 600px) {
@@ -546,7 +656,9 @@ body {
   .header { flex-direction: column; align-items: flex-start; gap: 12px; }
   .kpi-strip  { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: 1fr; }
-  .controls-section { flex-direction: column; align-items: stretch; }
+  .visual-gauges,
+  .visual-dashboard-right .charts-row { grid-template-columns: 1fr; }
+  .controls-top { flex-direction: column; align-items: stretch; }
   .btn-secondary { margin-left: 0; width: 100%; }
   .date-range { flex-direction: column; align-items: stretch; }
   .date-input { width: 100%; min-width: auto; }

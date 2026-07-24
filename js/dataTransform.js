@@ -21,7 +21,15 @@ function obtenerNombresDeTablas(datosExcel) {
  */
 function obtenerColumnas(filas) {
   if (!filas || filas.length === 0) return [];
-  return Object.keys(filas[0]);
+
+  // SheetJS omite en cada objeto las celdas vacías. Por eso una columna como
+  // NPS o Productividad puede no existir en la primera fila aunque sí esté
+  // presente y tenga datos en el resto de la hoja.
+  const columnas = new Set();
+  filas.forEach(fila => {
+    Object.keys(fila || {}).forEach(columna => columnas.add(columna));
+  });
+  return Array.from(columnas);
 }
 
 function normalizarNombreColumna(nombre) {

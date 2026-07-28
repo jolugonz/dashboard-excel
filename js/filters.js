@@ -271,7 +271,7 @@ function generarTarjetasEstadisticas(estadisticas, tipos, datosOriginales) {
   tarjetas.push({
     tipo: 'cantidad',
     columna: 'Registros',
-    label: 'Total de Registros',
+    label: 'Registros',
     valor: datosOriginales.length,
     icono: '📊'
   });

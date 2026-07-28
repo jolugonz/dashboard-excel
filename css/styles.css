@@ -25,7 +25,7 @@
   --text-secondary: #8ba3cc;
   --text-muted:     #4a6490;
 
-  --radius-card: 16px;
+  --radius-card: 10px;
   --radius-sm:   10px;
   --shadow-card: 0 8px 32px rgba(0,0,0,0.45);
   --shadow-glow: 0 0 24px rgba(0,194,255,0.18);
@@ -350,8 +350,8 @@ body {
    ======================================== */
 .kpi-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -379,17 +379,38 @@ body {
   box-shadow: var(--shadow-card);
 }
 
+.kpi-card-compact {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 10px 6px;
+  min-height: 78px;
+  max-width: 100%;
+}
+
+.kpi-card-compact .kpi-label {
+  margin-bottom: 0;
+  margin-top: 6px;
+}
+
+.kpi-card-compact .kpi-sub {
+  display: none;
+}
+
 .kpi-label {
-  font-size: 0.72rem;
+  font-size: 0.56rem;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  line-height: 1.2;
 }
 
 .kpi-value {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   color: var(--text-primary);
@@ -397,7 +418,7 @@ body {
 }
 
 .kpi-value.big {
-  font-size: 2.6rem;
+  font-size: 2.1rem;
 }
 
 .kpi-sub {

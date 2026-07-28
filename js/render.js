@@ -236,10 +236,9 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
 
   if (cardRegistros) {
     stripHtml += `
-      <div class="kpi-card" style="--accent-bar:var(--cyan)">
-        <div class="kpi-label">${cardRegistros.label}</div>
+      <div class="kpi-card kpi-card-compact" style="--accent-bar:var(--cyan)">
         <div class="kpi-value big">${cardRegistros.valor.toLocaleString('es-AR')}</div>
-        <div class="kpi-sub">filas cargadas</div>
+        <div class="kpi-label">${cardRegistros.label}</div>
       </div>`;
   }
 
@@ -251,15 +250,51 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
       normalizarNombreColumna(columna) === normalizarNombreColumna(nombre)
     )
   );
+  const buscarColumnaFlexible = (patrones, exacto = false) => columnasFiltradas.find(columna => {
+    const columnaNorm = normalizarNombreColumna(columna);
+    return patrones.some(patron => {
+      const patronNorm = normalizarNombreColumna(patron);
+      return exacto
+        ? columnaNorm === patronNorm
+        : columnaNorm === patronNorm || columnaNorm.includes(patronNorm) || patronNorm.includes(columnaNorm);
+    });
+  });
   const columnaMuestras = buscarColumna(['Muestra', 'Muestras']);
   const columnaPerfil = columnasFiltradas.find(columna =>
     normalizarNombreColumna(columna).includes('afunilamento')
   );
-  const totalMuestras = columnaMuestras
+  const sumarColumna = columna => columna
     ? filasFiltradas.reduce((total, fila) => {
-        const valor = parsearNumeroLocale(fila[columnaMuestras]);
+        const valor = parsearNumeroLocale(fila[columna]);
         return total + (isNaN(valor) ? 0 : valor);
       }, 0)
+    : 0;
+  const contarApariciones = (patrones, columnaBase) => {
+    if (!columnaBase) return 0;
+
+    return filasFiltradas.reduce((total, fila) => {
+      const valor = String(fila[columnaBase] ?? '')
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      if (!valor) return total;
+
+      const coincide = patrones.some(patron => {
+        const patronNorm = String(patron)
+          .trim()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+        return valor === patronNorm || valor.includes(patronNorm);
+      });
+
+      return coincide ? total + 1 : total;
+    }, 0);
+  };
+  const totalMuestras = columnaMuestras
+    ? sumarColumna(columnaMuestras)
     : 0;
   const totalCriticos = columnaPerfil
     ? filasFiltradas.filter(fila =>
@@ -268,27 +303,48 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
     : 0;
   const indicadoresResumen = [
     {
-      label: 'Total Muestras',
+      label: 'Muestras',
       valor: totalMuestras,
-      detalle: 'muestras en el período',
       color: 'var(--green)'
     },
     {
-      label: 'Total Críticos',
+      label: 'Críticos',
       valor: totalCriticos,
-      detalle: 'apariciones en Afunilamento Group',
+      color: 'var(--purple)'
+    }
+  ];
+  const indicadoresAdicionales = [
+    {
+      label: 'Bench',
+      valor: contarApariciones(['bench'], columnaPerfil),
+      color: 'var(--cyan)'
+    },
+    {
+      label: 'Eficiencia Retención',
+      valor: contarApariciones(['eficiencia retencion', 'retencion'], columnaPerfil),
+      color: 'var(--green)'
+    },
+    {
+      label: 'Eficiencia Retención (M - F)',
+      valor: contarApariciones([
+        'eficiencia retencion (m - f)',
+        'eficiencia retencion m-f',
+        'eficiencia retencion m f',
+        'm - f',
+        'm-f',
+        'm f'
+      ], columnaPerfil),
       color: 'var(--purple)'
     }
   ];
 
-  indicadoresResumen.forEach(indicador => {
+  [...indicadoresResumen, ...indicadoresAdicionales].forEach(indicador => {
     stripHtml += `
-      <div class="kpi-card" style="--accent-bar:${indicador.color}">
-        <div class="kpi-label">${indicador.label}</div>
+      <div class="kpi-card kpi-card-compact" style="--accent-bar:${indicador.color}">
         <div class="kpi-value" style="color:${indicador.color}">
           ${indicador.valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })}
         </div>
-        <div class="kpi-sub">${indicador.detalle}</div>
+        <div class="kpi-label">${indicador.label}</div>
       </div>`;
   });
 
@@ -736,7 +792,8 @@ function initQuartileCharts(filasFiltradas = []) {
       tension: 0.4,
       pointRadius: 3,
       pointHoverRadius: 5,
-      spanGaps: true
+      spanGaps: true,
+      hidden: !['Q3', 'Q4'].includes(cuartil)
     }));
 
     _charts[configuracion.id] = new Chart(canvas, {

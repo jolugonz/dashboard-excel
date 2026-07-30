@@ -1,0 +1,29 @@
+name: Verificar NodeJS
+
+on:
+  push:
+    branches:
+      - main
+      - desarrollo
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Mostrar versión de NodeJS
+        run: node --version
+
+      - name: Mostrar versión de NPM
+        run: npm --version
+
+      - name: Mostrar package.json
+        run: type package.json

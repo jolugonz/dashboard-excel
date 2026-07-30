@@ -1,0 +1,11 @@
+{
+    "name": "dashboard-excel",
+    "version": "1.0.0",
+    "description": "Dashboard para análisis de archivos Excel.",
+    "author": "Jorge Luis González",
+    "license": "MIT",
+    "main": "electron-main.js",
+    "scripts": {
+        "start": "electron ."
+    }
+}

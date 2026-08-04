@@ -1,39 +1,39 @@
-name: Build Dashboard
+# name: Build Dashboard
 
-on:
-  push:
-    branches:
-      - desarrollo
+# on:
+#   push:
+#     branches:
+#       - desarrollo
 
-jobs:
-  build:
-    runs-on: windows-latest
+# jobs:
+#   build:
+#     runs-on: windows-latest
 
-    steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Descargar repositorio
+#         uses: actions/checkout@v4
 
-      - name: Instalar NodeJS
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+#       - name: Instalar NodeJS
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 22
 
-      - name: Mostrar versión de NodeJS
-        run: node --version
+#       - name: Mostrar versión de NodeJS
+#         run: node --version
 
-      - name: Mostrar versión de NPM
-        run: npm --version
+#       - name: Mostrar versión de NPM
+#         run: npm --version
 
-      - name: Instalar dependencias
-        run: |
-          npm install
-          npm install --save-dev electron electron-builder
+#       - name: Instalar dependencias
+#         run: |
+#           npm install
+#           npm install --save-dev electron electron-builder
 
-      - name: Generar instalador
-        run: npm run build -- --publish=never
+#       - name: Generar instalador
+#         run: npm run build -- --publish=never
 
-      - name: Subir instalador
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dashboard-Setup
-          path: dist/
+#       - name: Subir instalador
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: Dashboard-Setup
+#           path: dist/

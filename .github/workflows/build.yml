@@ -1,13 +1,12 @@
-name: Instalar Electron
+name: Build Dashboard
 
 on:
   push:
     branches:
-      - main
       - desarrollo
 
 jobs:
-  test:
+  build:
     runs-on: windows-latest
 
     steps:
@@ -19,11 +18,16 @@ jobs:
         with:
           node-version: 22
 
-      - name: Crear package-lock.json
-        run: npm install
+      - name: Mostrar versión de NodeJS
+        run: node --version
 
-      - name: Instalar Electron
-        run: npm install electron --save-dev
+      - name: Mostrar versión de NPM
+        run: npm --version
 
-      - name: Mostrar versión de Electron
-        run: npx electron --version
+      - name: Instalar dependencias
+        run: |
+          npm install
+          npm install --save-dev electron electron-builder
+
+      - name: Generar instalador
+        run: npm run build

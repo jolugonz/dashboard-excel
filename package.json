@@ -1,7 +1,23 @@
 {
-    "name":"dashboard-excel",
-    "version":"1.0.0",
-    "description":"Dashboard para análisis de archivos Excel.",
-    "author":"Jorge Luis González",
-    "license":"MIT"
+  "name": "dashboard-excel",
+  "version": "1.0.0",
+  "description": "Dashboard para análisis de archivos Excel.",
+  "author": "Jorge Luis González",
+  "license": "MIT",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.jolugonz.dashboardexcel",
+    "productName": "Dashboard Excel",
+    "files": [
+      "**/*",
+      "!node_modules/.cache/**"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
 }

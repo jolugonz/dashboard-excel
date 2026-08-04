@@ -1,13 +1,12 @@
-name: Verificar NodeJS
+name: Build Dashboard
 
 on:
   push:
     branches:
-      - main
       - desarrollo
 
 jobs:
-  test:
+  build:
     runs-on: windows-latest
 
     steps:
@@ -25,5 +24,10 @@ jobs:
       - name: Mostrar versión de NPM
         run: npm --version
 
-      - name: Mostrar package.json
-        run: type package.json
+      - name: Instalar dependencias
+        run: |
+          npm install
+          npm install --save-dev electron electron-builder
+
+      - name: Generar instalador
+        run: npm run build

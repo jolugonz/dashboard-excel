@@ -35,20 +35,13 @@ window.addEventListener('beforeprint', () => {
   Object.entries(_charts).forEach(([id, chart]) => {
     const contenedor = chart.canvas.parentElement;
     if (!contenedor) return;
-    if (id === 'profiles-chart' && chart.$printLabels) {
-      chart.data.labels = chart.$printLabels;
-    }
-    const altura = id === 'profiles-chart' ? 470 : 210;
-    chart.resize(contenedor.clientWidth, altura);
+    chart.resize(contenedor.clientWidth, 210);
     chart.update('none');
   });
 });
 
 window.addEventListener('afterprint', () => {
   Object.entries(_charts).forEach(([id, chart]) => {
-    if (id === 'profiles-chart' && chart.$screenLabels) {
-      chart.data.labels = chart.$screenLabels;
-    }
     chart.resize();
     chart.update('none');
   });
@@ -378,27 +371,8 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
   /* ─────────── CHART CARDS ─────────── */
   // Solo si hay datos históricos (series de más de 1 punto) - placeholder inteligente
   const chartSection = buildChartSection(metricas);
-  const perfilesHtml = `
-    <div class="chart-card perfiles-chart-card">
-      <div class="chart-title">Cantidad de perfiles</div>
-      <div class="chart-subtitle">REP únicos por Afunilamento Group</div>
-      <div class="profile-chart-wrap">
-        <canvas id="profiles-chart"></canvas>
-      </div>
-    </div>`;
-  const eficienciaHtml = `
-    <div class="chart-card quartile-chart-card">
-      <div class="chart-title">Eficiencia por cuartil</div>
-      <div class="chart-canvas-wrap">
-        <canvas id="efficiency-chart"></canvas>
-      </div>
-    </div>
-    <div class="chart-card quartile-chart-card">
-      <div class="chart-title">Eficiencia Móvil por cuartil</div>
-      <div class="chart-canvas-wrap">
-        <canvas id="mobile-efficiency-chart"></canvas>
-      </div>
-    </div>`;
+  const perfilesHtml = buildProfilesCssChart(filasFiltradas);
+  const eficienciaHtml = buildQuartileCssCharts(filasFiltradas);
 
   /* ─────────── Render al DOM ─────────── */
   grid.innerHTML = `
@@ -414,9 +388,8 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
 
   // Inicializar charts después del render
   setTimeout(() => {
-    initProfilesChart(filasFiltradas);
-    initQuartileCharts(filasFiltradas);
     initCharts(metricas, filasFiltradas);
+    initQuartileTooltips();
   }, 50);
 
   // Ajustar tamaño del overlay si el texto es muy largo
@@ -594,7 +567,18 @@ function initCharts(metricas, filasFiltradas = []) {
         },
         plugins: { legend: { display: false } },
         scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } },
+          x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#8ba3cc',
+              autoSkip: false,
+              maxRotation: 45,
+              minRotation: 45,
+              align: 'end',
+              padding: 4,
+              font: { size: 9 }
+            }
+          },
           y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } }
         }
       }
@@ -602,13 +586,7 @@ function initCharts(metricas, filasFiltradas = []) {
   }
 }
 
-function initProfilesChart(filasFiltradas = []) {
-  if (typeof Chart === 'undefined') return;
-
-  const canvas = document.getElementById('profiles-chart');
-  if (!canvas) return;
-  _destroyChart('profiles-chart');
-
+function buildProfilesCssChart(filasFiltradas = []) {
   const columnas = Array.from(new Set(
     filasFiltradas.flatMap(fila => Object.keys(fila || {}))
   ));
@@ -619,7 +597,14 @@ function initProfilesChart(filasFiltradas = []) {
     columna => normalizarNombreColumna(columna) === 'rep'
   );
 
-  if (!columnaPerfil) return;
+  if (!columnaPerfil) {
+    return `
+      <div class="chart-card perfiles-chart-card">
+        <div class="chart-title">Cantidad de perfiles</div>
+        <div class="chart-subtitle">REP únicos por Afunilamento Group</div>
+        <div class="profile-chart-wrap profile-chart-empty">Sin datos de perfiles</div>
+      </div>`;
+  }
 
   // Un mismo REP puede aparecer en varios meses. Dentro de cada perfil se
   // cuenta una sola vez para el período y los filtros seleccionados.
@@ -639,91 +624,51 @@ function initProfilesChart(filasFiltradas = []) {
     cantidad: reps.size
   })).sort((a, b) => b.cantidad - a.cantidad);
 
-  const labels = ordenados.map(item => `${item.perfil} (${item.cantidad})`);
-  const printLabels = ordenados.map(item => {
-    const texto = item.perfil;
-    if (texto.length <= 24) return `${texto} (${item.cantidad})`;
+  const maximo = ordenados[0]?.cantidad || 1;
+  const colores = ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a'];
+  const escaparHtml = texto => String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
-    const palabras = texto.split(/\s+/);
-    let primeraLinea = '';
-    let segundaLinea = '';
-    palabras.forEach(palabra => {
-      if (!segundaLinea && `${primeraLinea} ${palabra}`.trim().length <= 24) {
-        primeraLinea = `${primeraLinea} ${palabra}`.trim();
-      } else {
-        segundaLinea = `${segundaLinea} ${palabra}`.trim();
-      }
-    });
-    return [primeraLinea, `${segundaLinea} (${item.cantidad})`.trim()];
-  });
-  const data = ordenados.map(item => item.cantidad);
-  const colores = ordenados.map((_, i) =>
-    ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a'][i % 5]
-  );
+  const filasHtml = ordenados.map((item, indice) => {
+    const ancho = (item.cantidad / maximo) * 100;
+    const color = colores[indice % colores.length];
+    return `
+      <div class="profile-bar-row">
+        <div class="profile-bar-label" title="${escaparHtml(item.perfil)}">
+          <span>${escaparHtml(item.perfil)}</span>
+          <strong>${item.cantidad.toLocaleString('es-AR')}</strong>
+        </div>
+        <div class="profile-bar-track" role="img" aria-label="${escaparHtml(item.perfil)}: ${item.cantidad} REP">
+          <span class="profile-bar-fill" style="--bar-width:${ancho}%;--bar-color:${color}"></span>
+        </div>
+      </div>`;
+  }).join('');
 
-  _charts['profiles-chart'] = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: colores.map(color => `${color}b8`),
-        borderColor: colores,
-        borderWidth: 1,
-        borderRadius: 5,
-        barThickness: 18
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: {
-        padding: { left: 14, right: 20, top: 4, bottom: 12 }
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: contexto => ` ${contexto.raw.toLocaleString('es-AR')} REP`
-          }
-        }
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: {
-            color: '#8ba3cc',
-            precision: 0
-          }
-        },
-        y: {
-          grid: { display: false },
-          ticks: {
-            color: '#8ba3cc',
-            font: { size: 10 },
-            autoSkip: false
-          }
-        }
-      }
-    }
-  });
-  _charts['profiles-chart'].$screenLabels = labels;
-  _charts['profiles-chart'].$printLabels = printLabels;
+  return `
+    <div class="chart-card perfiles-chart-card">
+      <div class="chart-title">Cantidad de perfiles</div>
+      <div class="chart-subtitle">REP únicos por Afunilamento Group</div>
+      <div class="profile-chart-wrap">
+        <div class="profile-bars" role="list" aria-label="Cantidad de perfiles">
+          ${filasHtml || '<div class="profile-chart-empty">Sin datos de perfiles</div>'}
+        </div>
+      </div>
+    </div>`;
 }
 
-function initQuartileCharts(filasFiltradas = []) {
-  if (typeof Chart === 'undefined') return;
-
+function buildQuartileCssCharts(filasFiltradas = []) {
   const configuraciones = [
     {
-      id: 'efficiency-chart',
+      titulo: 'Eficiencia por cuartil',
       columnaValor: 'Eficiencia',
       columnaCuartil: 'Quartil Eficiencia'
     },
     {
-      id: 'mobile-efficiency-chart',
+      titulo: 'Eficiencia Móvil por cuartil',
       columnaValor: 'Eficiencia Móvil',
       columnaCuartil: 'Quartil Eficiencia Móvil'
     }
@@ -753,98 +698,130 @@ function initQuartileCharts(filasFiltradas = []) {
       year: 'numeric'
     });
   };
+    const etiquetaEje = clave => {
+      const [anio, mes] = clave.split('-').map(Number);
+      const nombreMes = new Date(anio, mes - 1, 1).toLocaleString('es-AR', { month: 'short' });
+      return `${nombreMes.replace('.', '')} '${String(anio).slice(-2)}`;
+    };
 
-  configuraciones.forEach(configuracion => {
-    const canvas = document.getElementById(configuracion.id);
-    if (!canvas || !columnaMes) return;
-    _destroyChart(configuracion.id);
+  const escaparHtml = texto => String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
+  return configuraciones.map(configuracion => {
     const columnaValor = buscarColumna(configuracion.columnaValor);
     const columnaCuartil = buscarColumna(configuracion.columnaCuartil);
-    if (!columnaValor || !columnaCuartil) return;
-
     const acumulados = new Map();
-    filasFiltradas.forEach(fila => {
-      const mes = claveMes(fila[columnaMes]);
-      const cuartil = String(fila[columnaCuartil] || '').trim().toUpperCase();
-      const valor = parsearNumeroLocale(fila[columnaValor]);
-      if (!mes || !['Q1', 'Q2', 'Q3', 'Q4'].includes(cuartil) || isNaN(valor)) return;
 
-      const clave = `${mes}|${cuartil}`;
-      if (!acumulados.has(clave)) acumulados.set(clave, { suma: 0, cantidad: 0 });
-      const acumulado = acumulados.get(clave);
-      acumulado.suma += valor;
-      acumulado.cantidad += 1;
-    });
+    if (columnaMes && columnaValor && columnaCuartil) {
+      filasFiltradas.forEach(fila => {
+        const mes = claveMes(fila[columnaMes]);
+        const cuartil = String(fila[columnaCuartil] || '').trim().toUpperCase();
+        const valor = parsearNumeroLocale(fila[columnaValor]);
+        if (!mes || !['Q1', 'Q2', 'Q3', 'Q4'].includes(cuartil) || isNaN(valor)) return;
+
+        const clave = `${mes}|${cuartil}`;
+        if (!acumulados.has(clave)) acumulados.set(clave, { suma: 0, cantidad: 0 });
+        const acumulado = acumulados.get(clave);
+        acumulado.suma += valor;
+        acumulado.cantidad += 1;
+      });
+    }
 
     const meses = Array.from(new Set(
       Array.from(acumulados.keys()).map(clave => clave.split('|')[0])
     )).sort();
-    const datasets = ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => ({
-      label: cuartil,
-      data: meses.map(mes => {
-        const acumulado = acumulados.get(`${mes}|${cuartil}`);
-        return acumulado ? acumulado.suma / acumulado.cantidad : null;
-      }),
-      borderColor: colores[cuartil],
-      backgroundColor: colores[cuartil],
-      borderWidth: 2,
-      tension: 0.4,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      spanGaps: true,
-      hidden: !['Q3', 'Q4'].includes(cuartil)
-    }));
+    const valores = meses.flatMap(mes => ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => {
+      const acumulado = acumulados.get(`${mes}|${cuartil}`);
+      return acumulado ? acumulado.suma / acumulado.cantidad : null;
+    }).filter(valor => valor !== null));
+    const minimo = Math.min(...valores, 0);
+    let maximo = Math.max(...valores, 0);
+    if (maximo === minimo) maximo = minimo + 1;
+    const posicionY = valor => {
+      const proporcion = (maximo - valor) / (maximo - minimo);
+      return Math.min(88, Math.max(8, 8 + proporcion * 80));
+    };
+    const series = cuartil => meses.map((mes, indice) => {
+      const acumulado = acumulados.get(`${mes}|${cuartil}`);
+      if (!acumulado) return null;
+      return {
+        y: posicionY(acumulado.suma / acumulado.cantidad),
+        valor: acumulado.suma / acumulado.cantidad
+      };
+    });
+    const seriesHtml = ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => {
+      const puntos = series(cuartil);
+      const segmentos = puntos.map((punto, indice) => {
+        if (!punto) return '<div class="quartile-css-segment is-empty"></div>';
+        const tieneAnterior = puntos.slice(0, indice).some(Boolean);
+        const anterior = tieneAnterior ? puntos.slice(0, indice).reverse().find(Boolean) : punto;
+        const valor = punto.valor.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const claseInicio = tieneAnterior ? '' : ' is-first';
+        return `<div class="quartile-css-segment${claseInicio}" style="--y:${punto.y}%;--py:${anterior.y}%"><span class="quartile-point" role="button" tabindex="0" data-quartile="${cuartil}" data-month="${escaparHtml(etiquetaMes(meses[indice]))}" data-value="${valor}"></span></div>`;
+      }).join('');
+      return `<div class="quartile-css-series quartile-${cuartil.toLowerCase()}" style="--line-color:${colores[cuartil]}">${segmentos}</div>`;
+    }).join('');
+    const intervaloEtiqueta = meses.length > 8 ? 2 : 1;
+    const etiquetasHtml = meses.map((mes, indice) => {
+      if (indice % intervaloEtiqueta !== 0 && indice !== meses.length - 1) return '';
+      const posicionEtiqueta = ((indice + 0.5) / meses.length) * 100;
+      return `<span style="--label-position:${posicionEtiqueta}%">${escaparHtml(etiquetaEje(mes))}</span>`;
+    }).join('');
+    const graficoHtml = meses.length
+      ? `<div class="quartile-css-chart" style="--month-count:${meses.length}" role="img" aria-label="${escaparHtml(configuracion.titulo)}"><div class="quartile-css-stage"><div class="quartile-grid-lines">${[0, 25, 50, 75, 100].map(y => `<span style="--grid-y:${y}%"></span>`).join('')}</div>${seriesHtml}</div><div class="quartile-axis-labels">${etiquetasHtml}</div></div>`
+      : '<div class="profile-chart-empty">Sin datos de cuartiles</div>';
 
-    _charts[configuracion.id] = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: meses.map(etiquetaMes),
-        datasets
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-          padding: { left: 10, right: 16, top: 4, bottom: 12 }
-        },
-        interaction: { mode: 'nearest', intersect: false },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              color: '#8ba3cc',
-              usePointStyle: true,
-              boxWidth: 7,
-              font: { size: 10 }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: contexto =>
-                ` ${contexto.dataset.label}: ${Number(contexto.raw).toLocaleString('es-AR', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}`
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: {
-              color: '#8ba3cc',
-              font: { size: 9 }
-            }
-          },
-          y: {
-            beginAtZero: true,
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: '#8ba3cc', font: { size: 9 } }
-          }
-        }
-      }
+    return `
+      <div class="chart-card quartile-chart-card">
+        <div class="chart-title">${configuracion.titulo}</div>
+        <div class="quartile-legend" aria-label="Cuartiles">
+          ${['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => `<span><i style="--legend-color:${colores[cuartil]}"></i>${cuartil}</span>`).join('')}
+        </div>
+        <div class="quartile-chart-wrap">
+          ${graficoHtml}
+          ${meses.length ? '<div class="quartile-tooltip" role="status" aria-live="polite"></div>' : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function initQuartileTooltips() {
+  document.querySelectorAll('.quartile-chart-wrap').forEach(contenedor => {
+    const tooltip = contenedor.querySelector('.quartile-tooltip');
+    if (!tooltip) return;
+
+    contenedor.querySelectorAll('.quartile-point').forEach(punto => {
+      const mostrar = evento => {
+        tooltip.innerHTML = `<span class="quartile-tooltip-dot" style="--tooltip-color:${punto.parentElement.parentElement.style.getPropertyValue('--line-color')}"></span><span><b>${punto.dataset.quartile}</b> · ${punto.dataset.month}</span><strong>${punto.dataset.value}</strong>`;
+        tooltip.classList.add('is-visible');
+        mover(evento);
+      };
+      const mover = evento => {
+        const rect = contenedor.getBoundingClientRect();
+        const puntoRect = punto.getBoundingClientRect();
+        const margen = 10;
+        const ancho = tooltip.offsetWidth;
+        const alto = tooltip.offsetHeight;
+        const izquierda = Math.min(
+          Math.max(puntoRect.left - rect.left + puntoRect.width / 2 - ancho / 2, margen),
+          rect.width - ancho - margen
+        );
+        const arriba = Math.max(puntoRect.top - rect.top - alto - margen, margen);
+        tooltip.style.left = `${izquierda}px`;
+        tooltip.style.top = `${arriba}px`;
+      };
+      const ocultar = () => tooltip.classList.remove('is-visible');
+
+      punto.addEventListener('mouseenter', mostrar);
+      punto.addEventListener('mousemove', mover);
+      punto.addEventListener('mouseleave', ocultar);
+      punto.addEventListener('focus', mostrar);
+      punto.addEventListener('blur', ocultar);
+      punto.setAttribute('tabindex', '0');
     });
   });
 }

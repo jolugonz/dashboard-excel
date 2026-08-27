@@ -224,7 +224,7 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
   const cardRegistros = metricas.find(m => m.tipo === 'cantidad');
   const cardsNum      = metricas.filter(m => m.tipo === 'numero');
 
-  /* ─────────── KPI STRIP (fila superior) ─────────── */
+    /* ─────────── KPI STRIP (fila superior) ─────────── */
   let stripHtml = '';
 
   if (cardRegistros) {
@@ -573,10 +573,10 @@ function initCharts(metricas, filasFiltradas = []) {
               color: '#8ba3cc',
               autoSkip: false,
               maxRotation: 45,
-              minRotation: 45,
-              align: 'end',
-              padding: 4,
-              font: { size: 9 }
+              minRotation: 0,
+              align: 'center',
+              padding: 3,
+              font: { size: 10 }
             }
           },
           y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } }
@@ -765,9 +765,7 @@ function buildQuartileCssCharts(filasFiltradas = []) {
       }).join('');
       return `<div class="quartile-css-series quartile-${cuartil.toLowerCase()}" style="--line-color:${colores[cuartil]}">${segmentos}</div>`;
     }).join('');
-    const intervaloEtiqueta = meses.length > 8 ? 2 : 1;
     const etiquetasHtml = meses.map((mes, indice) => {
-      if (indice % intervaloEtiqueta !== 0 && indice !== meses.length - 1) return '';
       const posicionEtiqueta = ((indice + 0.5) / meses.length) * 100;
       return `<span style="--label-position:${posicionEtiqueta}%">${escaparHtml(etiquetaEje(mes))}</span>`;
     }).join('');

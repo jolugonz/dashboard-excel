@@ -759,7 +759,7 @@ body {
 .chart-canvas-wrap {
   position: relative;
   width: 100%;
-  height: 205px;
+  height: 160px;
 }
 
 .quartile-chart-card {
@@ -797,8 +797,8 @@ body {
 
 .quartile-css-chart {
   display: grid;
-  gap: 8px;
-  min-height: 240px;
+  gap: 12px;
+  min-height: 275px;
 }
 
 .quartile-css-stage {
@@ -823,6 +823,7 @@ body {
 
 .quartile-css-series {
   color: var(--line-color);
+  --line-thickness: 3px;
   pointer-events: none;
   animation: quartileLineReveal 0.7s ease both;
 }
@@ -839,13 +840,14 @@ body {
   right: 50%;
   bottom: 0;
   left: -50%;
+  width: auto;
   content: '';
   background: currentColor;
   clip-path: polygon(
-    -2% calc(var(--py) - 2.5px),
-    -2% calc(var(--py) + 2.5px),
-    102% calc(var(--y) + 2.5px),
-    102% calc(var(--y) - 2.5px)
+    -2% calc(var(--py) - var(--line-thickness) / 2),
+    -2% calc(var(--py) + var(--line-thickness) / 2),
+    102% calc(var(--y) + var(--line-thickness) / 2),
+    102% calc(var(--y) - var(--line-thickness) / 2)
   );
 }
 
@@ -856,7 +858,7 @@ body {
   left: 50%;
   width: 10px;
   height: 10px;
-  border: 3px solid var(--bg-card);
+  border: 0;
   border-radius: 50%;
   background: currentColor;
   cursor: help;
@@ -879,8 +881,8 @@ body {
 .quartile-axis-labels {
   position: relative;
   display: block;
-  height: 24px;
-  min-height: 24px;
+  height: 48px;
+  min-height: 48px;
   margin: 0 4px;
   color: var(--text-muted);
   font-size: 0.72rem;
@@ -891,7 +893,8 @@ body {
 .quartile-axis-labels span {
   position: absolute;
   left: var(--label-position);
-  transform: translateX(-50%);
+  transform: translateX(calc(-100% - 8px)) rotate(-45deg);
+  transform-origin: top right;
   white-space: nowrap;
 }
 
@@ -984,10 +987,9 @@ body {
   .date-input { width: 100%; min-width: auto; }
   .profile-bars { gap: 11px; }
   .profile-bar-label { font-size: 0.68rem; }
-  .quartile-css-chart { min-height: 220px; }
+  .quartile-css-chart { min-height: 255px; }
   .quartile-css-stage { height: 185px; }
-  .quartile-axis-labels { font-size: 0.66rem; }
-  .chart-canvas-wrap { height: 205px; }
+  .quartile-axis-labels { height: 42px; min-height: 42px; font-size: 0.66rem; }
   .quartile-tooltip { font-size: 0.68rem; }
 }
 

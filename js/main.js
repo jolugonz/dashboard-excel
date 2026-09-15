@@ -14,17 +14,40 @@ let datosGlobales = {
 
 // estado de filtros adicionales
 let filtrosActivos = { proveedor: null, negocio: null };
+window.filtrosActivos = filtrosActivos;
+let vistaActiva = 'resumen';
+let asesorActivo = '';
 
 window.setFiltroProveedor = function(valor) {
   filtrosActivos.proveedor = valor === filtrosActivos.proveedor ? null : valor;
+  window.filtrosActivos = filtrosActivos;
   actualizarVista();
   actualizarBotonesFiltro();
 };
 
 window.setFiltroNegocio = function(valor) {
   filtrosActivos.negocio = valor === filtrosActivos.negocio ? null : valor;
+  window.filtrosActivos = filtrosActivos;
   actualizarVista();
   actualizarBotonesFiltro();
+};
+
+window.abrirVistaAsesor = function(proveedor) {
+  vistaActiva = 'asesor';
+  asesorActivo = '';
+  filtrosActivos.asesorDetalle = null;
+  filtrosActivos.proveedor = proveedor;
+  window.filtrosActivos = filtrosActivos;
+  actualizarVista();
+};
+
+window.volverAlResumen = function() {
+  vistaActiva = 'resumen';
+  asesorActivo = '';
+  filtrosActivos.asesorDetalle = null;
+  const advisorSection = document.getElementById('advisor-section');
+  if (advisorSection) advisorSection.style.display = 'none';
+  actualizarVista();
 };
 
 function actualizarBotonesFiltro() {
@@ -56,6 +79,8 @@ const dateStart = document.getElementById("date-start");
 const dateEnd = document.getElementById("date-end");
 const resetFilter = document.getElementById("reset-filter");
 const downloadPdf = document.getElementById("download-pdf");
+const advisorSelect = document.getElementById('advisor-select');
+const advisorBack = document.getElementById('advisor-back');
 
 if (dateStart) {
   dateStart.addEventListener("change", actualizarVista);
@@ -73,6 +98,26 @@ if (downloadPdf) {
   downloadPdf.addEventListener("click", () => {
     window.print();
   });
+}
+
+if (advisorSelect) {
+  advisorSelect.addEventListener('change', () => {
+    asesorActivo = advisorSelect.value;
+    filtrosActivos.asesorDetalle = asesorActivo || null;
+    window.filtrosActivos = filtrosActivos;
+    const advisorTitle = document.getElementById('advisor-title');
+    if (advisorTitle) {
+      const proveedor = filtrosActivos.proveedor || 'Proveedor';
+      advisorTitle.textContent = asesorActivo
+        ? `Detalle de ${asesorActivo} · ${proveedor}`
+        : `Detalle por asesor · ${proveedor}`;
+    }
+    actualizarVista();
+  });
+}
+
+if (advisorBack) {
+  advisorBack.addEventListener('click', () => window.volverAlResumen());
 }
 
 // ============================================
@@ -156,12 +201,26 @@ function actualizarVista() {
     filasFiltradas2 = filasFiltradas2.filter(f => String(f['Negocio'] || '').trim() === String(filtrosActivos.negocio).trim());
   }
 
+  if (vistaActiva === 'asesor' && asesorActivo) {
+    filasFiltradas2 = filasFiltradas2.filter(f => String(f['Rep'] || '').trim() === asesorActivo);
+  }
+
   if (filasFiltradas2.length === 0) {
-    mostrarError("No hay datos para el rango de fechas seleccionado / filtro activo");
+    mostrarError(obtenerMensajeSinResultados());
     return;
   }
 
   limpiarError();
+
+  if (vistaActiva === 'asesor') {
+    const resultsSection = document.getElementById('results-section');
+    if (resultsSection) resultsSection.style.display = 'none';
+    renderizarDetalleAsesor(filasFiltradas2);
+    return;
+  }
+
+  const advisorSection = document.getElementById('advisor-section');
+  if (advisorSection) advisorSection.style.display = 'none';
 
   const metricas = calcularMetricas(filasFiltradas2, datosGlobales.tipos);
   renderizarMetricas(metricas, filasFiltradas2);
@@ -172,6 +231,26 @@ function actualizarVista() {
       controlsSection.scrollIntoView({ behavior: "smooth" });
     }, 100);
   }
+}
+
+function obtenerMensajeSinResultados() {
+  const proveedor = filtrosActivos.proveedor;
+  const pcrc = filtrosActivos.negocio;
+
+  if (proveedor && pcrc) {
+    const proveedorNormalizado = normalizarNombreColumna(proveedor);
+    const pcrcNormalizado = normalizarNombreColumna(pcrc);
+    const existeCombinacion = datosGlobales.filas.some((fila) => {
+      return normalizarNombreColumna(fila['Proveedor']) === proveedorNormalizado &&
+        normalizarNombreColumna(fila['Negocio']) === pcrcNormalizado;
+    });
+
+    if (!existeCombinacion) {
+      return `El proveedor «${proveedor}» no tiene registros para el PCRC «${pcrc}». Selecciona otro PCRC o proveedor.`;
+    }
+  }
+
+  return "No hay datos para el rango de fechas seleccionado / filtro activo";
 }
 
 function limpiarFiltroFechas() {

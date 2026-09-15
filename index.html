@@ -7,14 +7,64 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
 
-    <!-- Header -->
+    <!-- Header — includes date filter after file load -->
     <header class="header">
       <h1>Dashboard de Métricas</h1>
+
+      <!-- Date filter (hidden until file loaded, shown by JS) -->
+      <div
+        class="header-date-filter"
+        id="header-date-filter"
+        role="group"
+        aria-labelledby="date-filter-label"
+        style="min-width:0;max-width:100%;flex-wrap:wrap;justify-content:flex-end;"
+      >
+        <label id="date-filter-label">Período</label>
+        <div class="date-range" style="flex-wrap:wrap;">
+          <label for="date-start">Desde</label>
+          <input
+            type="month"
+            id="date-start"
+            class="date-input"
+            autocomplete="off"
+            inputmode="none"
+            onkeydown="return false"
+            onpaste="return false"
+            ondrop="return false"
+          >
+          <span aria-hidden="true">→</span>
+          <label for="date-end">Hasta</label>
+          <input
+            type="month"
+            id="date-end"
+            class="date-input"
+            autocomplete="off"
+            inputmode="none"
+            onkeydown="return false"
+            onpaste="return false"
+            ondrop="return false"
+          >
+        </div>
+        <div class="header-actions">
+          <button id="reset-filter" class="btn-secondary" type="reset" style="padding:6px 14px;font-size:0.8rem;">Limpiar</button>
+          <button
+            id="download-pdf"
+            class="btn-icon"
+            type="button"
+            aria-label="Descargar informe en PDF"
+            data-tooltip="Descargar informe en PDF"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </header>
 
     <!-- Upload -->
@@ -28,37 +78,33 @@
       <p class="file-info" id="file-info"></p>
     </section>
 
-    <!-- Controles -->
+    <!-- Controles — only provider/PCRC pills -->
     <section class="controls-section" id="controls-section" style="display: none;">
-      <div class="controls-top">
-        <div class="filter-container">
-          <label for="date-start">Filtrar por fecha</label>
-          <div class="date-range">
-            <input type="month" id="date-start" class="date-input">
-            <span>→</span>
-            <input type="month" id="date-end" class="date-input">
-          </div>
-        </div>
-        <div class="controls-actions">
-          <button
-            id="download-pdf"
-            class="btn-icon"
-            type="button"
-            aria-label="Descargar informe en PDF"
-            data-tooltip="Descargar informe en PDF"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/>
-            </svg>
-          </button>
-          <button id="reset-filter" class="btn-secondary">Limpiar filtro</button>
-        </div>
-      </div>
+      <!-- controls-top kept empty for JS compat; date filter now lives in header -->
+      <div class="controls-top"></div>
     </section>
 
     <!-- Resultados -->
     <section class="results-section" id="results-section" style="display: none;">
       <div id="stats-grid"></div>
+    </section>
+
+    <!-- Detalle alternativo por asesor -->
+    <section class="advisor-section" id="advisor-section" style="display: none;">
+      <div class="advisor-header">
+        <button id="advisor-back" class="btn-secondary" type="button">← Volver al resumen</button>
+        <div>
+          <p class="advisor-eyebrow">Vista de detalle</p>
+          <h2 id="advisor-title">Detalle por asesor</h2>
+        </div>
+      </div>
+      <div class="advisor-controls">
+        <label for="advisor-select">Asesor</label>
+        <select id="advisor-select" class="advisor-select">
+          <option value="">Todos los asesores</option>
+        </select>
+      </div>
+      <div id="advisor-stats-grid"></div>
     </section>
 
     <!-- Error -->
@@ -71,10 +117,10 @@
   <script src="lib/chart.umd.js"></script>
 
   <!-- Módulos -->
-  <script src="js/loader.js"></script>
   <script src="js/dataTransform.js"></script>
   <script src="js/filters.js"></script>
-  <script src="js/render.js"></script>
+  <script src="js/loader.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/render.js"></script>
 </body>
 </html>

@@ -35,13 +35,20 @@ window.addEventListener('beforeprint', () => {
   Object.entries(_charts).forEach(([id, chart]) => {
     const contenedor = chart.canvas.parentElement;
     if (!contenedor) return;
-    chart.resize(contenedor.clientWidth, 210);
+    if (id === 'profiles-chart' && chart.$printLabels) {
+      chart.data.labels = chart.$printLabels;
+    }
+    const altura = id === 'profiles-chart' ? 470 : 210;
+    chart.resize(contenedor.clientWidth, altura);
     chart.update('none');
   });
 });
 
 window.addEventListener('afterprint', () => {
   Object.entries(_charts).forEach(([id, chart]) => {
+    if (id === 'profiles-chart' && chart.$screenLabels) {
+      chart.data.labels = chart.$screenLabels;
+    }
     chart.resize();
     chart.update('none');
   });
@@ -84,9 +91,10 @@ function parseLocaleNumber(v) {
   return isNaN(n) ? 0 : n;
 }
 function renderizarFiltroMeses(meses) {
-  const ctrl  = document.getElementById('controls-section');
-  const start = document.getElementById('date-start');
-  const end   = document.getElementById('date-end');
+  const ctrl        = document.getElementById('controls-section');
+  const headerFiltro = document.getElementById('header-date-filter');
+  const start       = document.getElementById('date-start');
+  const end         = document.getElementById('date-end');
   if (!ctrl || !start || !end) return;
   start.value = '';
   end.value   = '';
@@ -112,7 +120,17 @@ function renderizarFiltroMeses(meses) {
     end.removeAttribute('max');
   }
 
-  ctrl.style.display = meses.length > 0 ? 'flex' : 'none';
+  // Mostrar filtro de fecha en el header
+  if (headerFiltro) {
+    if (meses.length > 0) {
+      headerFiltro.classList.add('visible');
+    } else {
+      headerFiltro.classList.remove('visible');
+    }
+  }
+
+  // La controls-section sólo muestra los filtros de proveedor / negocio
+  ctrl.style.display = 'none';
 }
 
 function renderizarFiltrosAdicionales() {
@@ -131,6 +149,9 @@ function renderizarFiltrosAdicionales() {
   const provWrap = document.createElement('div');
   provWrap.className = 'filter-buttons';
   proveedores.forEach(p => {
+    const provGroup = document.createElement('div');
+    provGroup.className = 'provider-filter-group';
+
     const btn = document.createElement('button');
     btn.className = 'btn-filter';
     btn.textContent = p;
@@ -140,7 +161,21 @@ function renderizarFiltrosAdicionales() {
     btn.addEventListener('click', () => {
       if (typeof window.setFiltroProveedor === 'function') window.setFiltroProveedor(p);
     });
-    provWrap.appendChild(btn);
+
+    provGroup.appendChild(btn);
+    if (normalizarNombreColumna(p) === 'konecta peru') {
+      const asesorBtn = document.createElement('button');
+      asesorBtn.className = 'btn-filter btn-advisor';
+      asesorBtn.type = 'button';
+      asesorBtn.textContent = 'Asesor';
+      asesorBtn.dataset.provider = p;
+      asesorBtn.setAttribute('aria-label', `Ver detalle por asesor de ${p}`);
+      asesorBtn.addEventListener('click', () => {
+        if (typeof window.abrirVistaAsesor === 'function') window.abrirVistaAsesor(p);
+      });
+      provGroup.appendChild(asesorBtn);
+    }
+    provWrap.appendChild(provGroup);
   });
 
   // Negocio (PCRC)
@@ -175,6 +210,11 @@ function renderizarFiltrosAdicionales() {
   container.appendChild(negWrap);
 
   ctrl.appendChild(container);
+
+  // Mostrar la sección sólo si hay botones de filtro disponibles
+  if (proveedores.length > 0 || negocios.length > 0) {
+    ctrl.style.display = 'flex';
+  }
 }
 
 /* ───────────────────────────────────────
@@ -210,11 +250,12 @@ function buildGaugeSVG(value, min, max, color) {
 /* ───────────────────────────────────────
    Render principal de métricas
 ─────────────────────────────────────── */
-function renderizarMetricas(metricas, filasFiltradas = []) {
-  const grid = document.getElementById('stats-grid');
+function renderizarMetricas(metricas, filasFiltradas = [], opciones = {}) {
+  const esVistaAsesor = opciones.vista === 'asesor';
+  const grid = document.getElementById(opciones.targetId || 'stats-grid');
   if (!grid) return;
 
-  const res = document.getElementById('results-section');
+  const res = document.getElementById(opciones.sectionId || 'results-section');
   if (res) res.style.display = 'block';
 
   // destruir charts previos
@@ -224,10 +265,10 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
   const cardRegistros = metricas.find(m => m.tipo === 'cantidad');
   const cardsNum      = metricas.filter(m => m.tipo === 'numero');
 
-    /* ─────────── KPI STRIP (fila superior) ─────────── */
+  /* ─────────── KPI STRIP (fila superior) ─────────── */
   let stripHtml = '';
 
-  if (cardRegistros) {
+  if (cardRegistros && !esVistaAsesor) {
     stripHtml += `
       <div class="kpi-card kpi-card-compact" style="--accent-bar:var(--cyan)">
         <div class="kpi-value big">${cardRegistros.valor.toLocaleString('es-AR')}</div>
@@ -371,8 +412,57 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
   /* ─────────── CHART CARDS ─────────── */
   // Solo si hay datos históricos (series de más de 1 punto) - placeholder inteligente
   const chartSection = buildChartSection(metricas);
-  const perfilesHtml = buildProfilesCssChart(filasFiltradas);
-  const eficienciaHtml = buildQuartileCssCharts(filasFiltradas);
+  const perfilesHtml = esVistaAsesor ? `
+    <div class="advisor-history-stack">
+      <div class="chart-card perfiles-chart-card">
+        <div class="chart-title">Historial de perfiles</div>
+        <div class="chart-subtitle">Frecuencia total desde el inicio de la cuenta</div>
+        <div class="profile-chart-wrap advisor-treemap-wrap"><div id="advisor-profiles-chart" class="advisor-treemap" role="img" aria-label="Frecuencia histórica de perfiles"></div></div>
+      </div>
+      <div class="chart-card advisor-history-card">
+        <div class="chart-title">Historial de supervisores</div>
+        <div class="chart-subtitle">Apariciones y meses asociados al asesor</div>
+        <div id="advisor-supervisors-table" class="advisor-table-container"></div>
+      </div>
+    </div>` : `
+    <div class="chart-card perfiles-chart-card">
+      <div class="chart-title">Cantidad de perfiles</div>
+      <div class="chart-subtitle">REP únicos por Afunilamento Group</div>
+      <div class="profile-chart-wrap">
+        <canvas id="profiles-chart"></canvas>
+      </div>
+    </div>`;
+  // Cuando el filtro de negocio es "técnica", reemplazar Eficiencia por Resolución
+  const negocioActivo = (window.filtrosActivos && window.filtrosActivos.negocio)
+    ? normalizarNombreColumna(window.filtrosActivos.negocio)
+    : '';
+  const esTecnica = negocioActivo.includes('tecnica') || negocioActivo.includes('técnica');
+
+  const eficienciaHtml = esTecnica ? `
+    <div class="chart-card quartile-chart-card">
+      <div class="chart-title">Resolución por cuartil</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="resolution-chart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card quartile-chart-card">
+      <div class="chart-title">Eficiencia Móvil por cuartil</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="mobile-efficiency-chart"></canvas>
+      </div>
+    </div>` : `
+    <div class="chart-card quartile-chart-card">
+      <div class="chart-title">Eficiencia por cuartil</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="efficiency-chart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card quartile-chart-card">
+      <div class="chart-title">Eficiencia Móvil por cuartil</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="mobile-efficiency-chart"></canvas>
+      </div>
+    </div>`;
 
   /* ─────────── Render al DOM ─────────── */
   grid.innerHTML = `
@@ -388,8 +478,28 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
 
   // Inicializar charts después del render
   setTimeout(() => {
+    if (esVistaAsesor) {
+      const columnasHistoricas = Array.from(new Set(filasFiltradas.flatMap(fila => Object.keys(fila || {}))));
+      const columnaMesHistorica = window.datosGlobales?.columnaMes;
+      const columnaPerfilHistorica = columnasHistoricas.find(columna => normalizarNombreColumna(columna).includes('afunilamento')) || 'Afunilamento Group';
+      const columnaSupervisorHistorica = obtenerColumnaHistorica(columnasHistoricas, ['SUP', 'Supervisor']) || 'SUP';
+      const mesesHistoricos = Array.from(new Set(
+        filasFiltradas.map(fila => obtenerClaveMesHistorico(fila[columnaMesHistorica])).filter(Boolean)
+      )).sort();
+      const filasHistoricasAsesor = (window.datosGlobales?.filas || []).filter(fila => {
+        const proveedor = window.filtrosActivos?.proveedor;
+        const negocio = window.filtrosActivos?.negocio;
+        const asesor = window.filtrosActivos?.asesorDetalle;
+        return (!proveedor || String(fila.Proveedor || '').trim() === String(proveedor).trim()) &&
+          (!negocio || String(fila.Negocio || '').trim() === String(negocio).trim()) &&
+          (!asesor || String(fila.Rep || '').trim() === String(asesor).trim());
+      });
+      inicializarHistoricosAsesor(filasFiltradas, filasHistoricasAsesor, mesesHistoricos, columnaMesHistorica, columnaPerfilHistorica, columnaSupervisorHistorica);
+    } else {
+      initProfilesChart(filasFiltradas);
+    }
+    initQuartileCharts(filasFiltradas, esTecnica);
     initCharts(metricas, filasFiltradas);
-    initQuartileTooltips();
   }, 50);
 
   // Ajustar tamaño del overlay si el texto es muy largo
@@ -427,7 +537,8 @@ function renderizarMetricas(metricas, filasFiltradas = []) {
 ─────────────────────────────────────── */
 function buildChartSection(metricas) {
   const num = metricas.filter(m => m.tipo === 'numero');
-  if (num.length === 0) return '';
+  const esVistaAsesor = typeof vistaActiva !== 'undefined' && vistaActiva === 'asesor';
+  if (num.length === 0 && !esVistaAsesor) return '';
 
   // Los dos gráficos históricos requeridos: NPS y Productividad.
   const prioridad = ['nps', 'productividad'];
@@ -435,7 +546,13 @@ function buildChartSection(metricas) {
 
   prioridad.forEach(pref => {
     const found = num.find(x => x.columna && normalizarNombreColumna(x.columna).includes(pref));
-    if (found) ordenados.push(found);
+    if (found || esVistaAsesor) {
+      ordenados.push(found || {
+        columna: pref === 'nps' ? 'NPS' : 'Productividad',
+        label: pref === 'nps' ? 'NPS - Evolución' : 'Productividad - Evolución',
+        tipo: 'numero'
+      });
+    }
   });
 
   // Construir placeholders de canvas; los datos reales vendrán de datosGlobales
@@ -451,6 +568,17 @@ function buildChartSection(metricas) {
   });
 
   return `<div class="charts-row">${cardsHtml}</div>`;
+}
+
+function mostrarSinDatosEnGrafico(elemento) {
+  if (!elemento) return;
+  const contenedor = elemento.parentElement;
+  if (!contenedor) return;
+  elemento.remove();
+  const mensaje = document.createElement('div');
+  mensaje.className = 'chart-empty-message';
+  mensaje.textContent = 'El asesor no cuenta con datos de esta métrica';
+  contenedor.appendChild(mensaje);
 }
 
 function initCharts(metricas, filasFiltradas = []) {
@@ -536,6 +664,11 @@ function initCharts(metricas, filasFiltradas = []) {
     const labels = serie.map(punto => formatMonthLabel(punto.key));
     const valores = serie.map(punto => punto.valor);
 
+    if (!valores.some(valor => valor !== null && !isNaN(valor))) {
+      mostrarSinDatosEnGrafico(canvas);
+      continue;
+    }
+
     const col = chartColors[i % chartColors.length];
 
     _charts[`chart-${i}`] = new Chart(canvas, {
@@ -567,18 +700,7 @@ function initCharts(metricas, filasFiltradas = []) {
         },
         plugins: { legend: { display: false } },
         scales: {
-          x: {
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: {
-              color: '#8ba3cc',
-              autoSkip: false,
-              maxRotation: 45,
-              minRotation: 0,
-              align: 'center',
-              padding: 3,
-              font: { size: 10 }
-            }
-          },
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } },
           y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } }
         }
       }
@@ -586,7 +708,13 @@ function initCharts(metricas, filasFiltradas = []) {
   }
 }
 
-function buildProfilesCssChart(filasFiltradas = []) {
+function initProfilesChart(filasFiltradas = []) {
+  if (typeof Chart === 'undefined') return;
+
+  const canvas = document.getElementById('profiles-chart');
+  if (!canvas) return;
+  _destroyChart('profiles-chart');
+
   const columnas = Array.from(new Set(
     filasFiltradas.flatMap(fila => Object.keys(fila || {}))
   ));
@@ -597,14 +725,7 @@ function buildProfilesCssChart(filasFiltradas = []) {
     columna => normalizarNombreColumna(columna) === 'rep'
   );
 
-  if (!columnaPerfil) {
-    return `
-      <div class="chart-card perfiles-chart-card">
-        <div class="chart-title">Cantidad de perfiles</div>
-        <div class="chart-subtitle">REP únicos por Afunilamento Group</div>
-        <div class="profile-chart-wrap profile-chart-empty">Sin datos de perfiles</div>
-      </div>`;
-  }
+  if (!columnaPerfil) return;
 
   // Un mismo REP puede aparecer en varios meses. Dentro de cada perfil se
   // cuenta una sola vez para el período y los filtros seleccionados.
@@ -624,51 +745,97 @@ function buildProfilesCssChart(filasFiltradas = []) {
     cantidad: reps.size
   })).sort((a, b) => b.cantidad - a.cantidad);
 
-  const maximo = ordenados[0]?.cantidad || 1;
-  const colores = ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a'];
-  const escaparHtml = texto => String(texto)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  const labels = ordenados.map(item => `${item.perfil} (${item.cantidad})`);
+  const printLabels = ordenados.map(item => {
+    const texto = item.perfil;
+    if (texto.length <= 24) return `${texto} (${item.cantidad})`;
 
-  const filasHtml = ordenados.map((item, indice) => {
-    const ancho = (item.cantidad / maximo) * 100;
-    const color = colores[indice % colores.length];
-    return `
-      <div class="profile-bar-row">
-        <div class="profile-bar-label" title="${escaparHtml(item.perfil)}">
-          <span>${escaparHtml(item.perfil)}</span>
-          <strong>${item.cantidad.toLocaleString('es-AR')}</strong>
-        </div>
-        <div class="profile-bar-track" role="img" aria-label="${escaparHtml(item.perfil)}: ${item.cantidad} REP">
-          <span class="profile-bar-fill" style="--bar-width:${ancho}%;--bar-color:${color}"></span>
-        </div>
-      </div>`;
-  }).join('');
+    const palabras = texto.split(/\s+/);
+    let primeraLinea = '';
+    let segundaLinea = '';
+    palabras.forEach(palabra => {
+      if (!segundaLinea && `${primeraLinea} ${palabra}`.trim().length <= 24) {
+        primeraLinea = `${primeraLinea} ${palabra}`.trim();
+      } else {
+        segundaLinea = `${segundaLinea} ${palabra}`.trim();
+      }
+    });
+    return [primeraLinea, `${segundaLinea} (${item.cantidad})`.trim()];
+  });
+  const data = ordenados.map(item => item.cantidad);
+  const colores = ordenados.map((_, i) =>
+    ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a'][i % 5]
+  );
 
-  return `
-    <div class="chart-card perfiles-chart-card">
-      <div class="chart-title">Cantidad de perfiles</div>
-      <div class="chart-subtitle">REP únicos por Afunilamento Group</div>
-      <div class="profile-chart-wrap">
-        <div class="profile-bars" role="list" aria-label="Cantidad de perfiles">
-          ${filasHtml || '<div class="profile-chart-empty">Sin datos de perfiles</div>'}
-        </div>
-      </div>
-    </div>`;
+  _charts['profiles-chart'] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colores.map(color => `${color}b8`),
+        borderColor: colores,
+        borderWidth: 1,
+        borderRadius: 5,
+        barThickness: 18
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: {
+        padding: { left: 14, right: 20, top: 4, bottom: 12 }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: contexto => ` ${contexto.raw.toLocaleString('es-AR')} REP`
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#8ba3cc',
+            precision: 0
+          }
+        },
+        y: {
+          grid: { display: false },
+          ticks: {
+            color: '#8ba3cc',
+            font: { size: 10 },
+            autoSkip: false
+          }
+        }
+      }
+    }
+  });
+  _charts['profiles-chart'].$screenLabels = labels;
+  _charts['profiles-chart'].$printLabels = printLabels;
 }
 
-function buildQuartileCssCharts(filasFiltradas = []) {
+function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
+  if (typeof Chart === 'undefined') return;
+
   const configuraciones = [
+    esTecnica
+      ? {
+          id: 'resolution-chart',
+          columnaValor: 'Resolución',
+          columnaCuartil: 'Quartil Eficiencia'
+        }
+      : {
+          id: 'efficiency-chart',
+          columnaValor: 'Eficiencia',
+          columnaCuartil: 'Quartil Eficiencia'
+        },
     {
-      titulo: 'Eficiencia por cuartil',
-      columnaValor: 'Eficiencia',
-      columnaCuartil: 'Quartil Eficiencia'
-    },
-    {
-      titulo: 'Eficiencia Móvil por cuartil',
+      id: 'mobile-efficiency-chart',
       columnaValor: 'Eficiencia Móvil',
       columnaCuartil: 'Quartil Eficiencia Móvil'
     }
@@ -698,128 +865,340 @@ function buildQuartileCssCharts(filasFiltradas = []) {
       year: 'numeric'
     });
   };
-    const etiquetaEje = clave => {
-      const [anio, mes] = clave.split('-').map(Number);
-      const nombreMes = new Date(anio, mes - 1, 1).toLocaleString('es-AR', { month: 'short' });
-      return `${nombreMes.replace('.', '')} '${String(anio).slice(-2)}`;
-    };
 
-  const escaparHtml = texto => String(texto)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  configuraciones.forEach(configuracion => {
+    const canvas = document.getElementById(configuracion.id);
+    if (!canvas || !columnaMes) return;
+    _destroyChart(configuracion.id);
 
-  return configuraciones.map(configuracion => {
     const columnaValor = buscarColumna(configuracion.columnaValor);
     const columnaCuartil = buscarColumna(configuracion.columnaCuartil);
-    const acumulados = new Map();
-
-    if (columnaMes && columnaValor && columnaCuartil) {
-      filasFiltradas.forEach(fila => {
-        const mes = claveMes(fila[columnaMes]);
-        const cuartil = String(fila[columnaCuartil] || '').trim().toUpperCase();
-        const valor = parsearNumeroLocale(fila[columnaValor]);
-        if (!mes || !['Q1', 'Q2', 'Q3', 'Q4'].includes(cuartil) || isNaN(valor)) return;
-
-        const clave = `${mes}|${cuartil}`;
-        if (!acumulados.has(clave)) acumulados.set(clave, { suma: 0, cantidad: 0 });
-        const acumulado = acumulados.get(clave);
-        acumulado.suma += valor;
-        acumulado.cantidad += 1;
-      });
+    if (!columnaValor || !columnaCuartil) {
+      mostrarSinDatosEnGrafico(canvas);
+      return;
     }
+
+    const acumulados = new Map();
+    filasFiltradas.forEach(fila => {
+      const mes = claveMes(fila[columnaMes]);
+      const cuartil = String(fila[columnaCuartil] || '').trim().toUpperCase();
+      const valor = parsearNumeroLocale(fila[columnaValor]);
+      if (!mes || !['Q1', 'Q2', 'Q3', 'Q4'].includes(cuartil) || isNaN(valor)) return;
+
+      const clave = `${mes}|${cuartil}`;
+      if (!acumulados.has(clave)) acumulados.set(clave, { suma: 0, cantidad: 0 });
+      const acumulado = acumulados.get(clave);
+      acumulado.suma += valor;
+      acumulado.cantidad += 1;
+    });
 
     const meses = Array.from(new Set(
       Array.from(acumulados.keys()).map(clave => clave.split('|')[0])
     )).sort();
-    const valores = meses.flatMap(mes => ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => {
-      const acumulado = acumulados.get(`${mes}|${cuartil}`);
-      return acumulado ? acumulado.suma / acumulado.cantidad : null;
-    }).filter(valor => valor !== null));
-    const minimo = Math.min(...valores, 0);
-    let maximo = Math.max(...valores, 0);
-    if (maximo === minimo) maximo = minimo + 1;
-    const posicionY = valor => {
-      const proporcion = (maximo - valor) / (maximo - minimo);
-      return Math.min(88, Math.max(8, 8 + proporcion * 80));
-    };
-    const series = cuartil => meses.map((mes, indice) => {
-      const acumulado = acumulados.get(`${mes}|${cuartil}`);
-      if (!acumulado) return null;
-      return {
-        y: posicionY(acumulado.suma / acumulado.cantidad),
-        valor: acumulado.suma / acumulado.cantidad
-      };
-    });
-    const seriesHtml = ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => {
-      const puntos = series(cuartil);
-      const segmentos = puntos.map((punto, indice) => {
-        if (!punto) return '<div class="quartile-css-segment is-empty"></div>';
-        const tieneAnterior = puntos.slice(0, indice).some(Boolean);
-        const anterior = tieneAnterior ? puntos.slice(0, indice).reverse().find(Boolean) : punto;
-        const valor = punto.valor.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const claseInicio = tieneAnterior ? '' : ' is-first';
-        return `<div class="quartile-css-segment${claseInicio}" style="--y:${punto.y}%;--py:${anterior.y}%"><span class="quartile-point" role="button" tabindex="0" data-quartile="${cuartil}" data-month="${escaparHtml(etiquetaMes(meses[indice]))}" data-value="${valor}"></span></div>`;
-      }).join('');
-      return `<div class="quartile-css-series quartile-${cuartil.toLowerCase()}" style="--line-color:${colores[cuartil]}">${segmentos}</div>`;
-    }).join('');
-    const etiquetasHtml = meses.map((mes, indice) => {
-      const posicionEtiqueta = ((indice + 0.5) / meses.length) * 100;
-      return `<span style="--label-position:${posicionEtiqueta}%">${escaparHtml(etiquetaEje(mes))}</span>`;
-    }).join('');
-    const graficoHtml = meses.length
-      ? `<div class="quartile-css-chart" style="--month-count:${meses.length}" role="img" aria-label="${escaparHtml(configuracion.titulo)}"><div class="quartile-css-stage"><div class="quartile-grid-lines">${[0, 25, 50, 75, 100].map(y => `<span style="--grid-y:${y}%"></span>`).join('')}</div>${seriesHtml}</div><div class="quartile-axis-labels">${etiquetasHtml}</div></div>`
-      : '<div class="profile-chart-empty">Sin datos de cuartiles</div>';
+    if (meses.length === 0) {
+      mostrarSinDatosEnGrafico(canvas);
+      return;
+    }
+    const datasets = ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => ({
+      label: cuartil,
+      data: meses.map(mes => {
+        const acumulado = acumulados.get(`${mes}|${cuartil}`);
+        return acumulado ? acumulado.suma / acumulado.cantidad : null;
+      }),
+      borderColor: colores[cuartil],
+      backgroundColor: colores[cuartil],
+      borderWidth: 2,
+      tension: 0.4,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      spanGaps: true,
+      hidden: !['Q3', 'Q4'].includes(cuartil)
+    }));
 
-    return `
-      <div class="chart-card quartile-chart-card">
-        <div class="chart-title">${configuracion.titulo}</div>
-        <div class="quartile-legend" aria-label="Cuartiles">
-          ${['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => `<span><i style="--legend-color:${colores[cuartil]}"></i>${cuartil}</span>`).join('')}
-        </div>
-        <div class="quartile-chart-wrap">
-          ${graficoHtml}
-          ${meses.length ? '<div class="quartile-tooltip" role="status" aria-live="polite"></div>' : ''}
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function initQuartileTooltips() {
-  document.querySelectorAll('.quartile-chart-wrap').forEach(contenedor => {
-    const tooltip = contenedor.querySelector('.quartile-tooltip');
-    if (!tooltip) return;
-
-    contenedor.querySelectorAll('.quartile-point').forEach(punto => {
-      const mostrar = evento => {
-        tooltip.innerHTML = `<span class="quartile-tooltip-dot" style="--tooltip-color:${punto.parentElement.parentElement.style.getPropertyValue('--line-color')}"></span><span><b>${punto.dataset.quartile}</b> · ${punto.dataset.month}</span><strong>${punto.dataset.value}</strong>`;
-        tooltip.classList.add('is-visible');
-        mover(evento);
-      };
-      const mover = evento => {
-        const rect = contenedor.getBoundingClientRect();
-        const puntoRect = punto.getBoundingClientRect();
-        const margen = 10;
-        const ancho = tooltip.offsetWidth;
-        const alto = tooltip.offsetHeight;
-        const izquierda = Math.min(
-          Math.max(puntoRect.left - rect.left + puntoRect.width / 2 - ancho / 2, margen),
-          rect.width - ancho - margen
-        );
-        const arriba = Math.max(puntoRect.top - rect.top - alto - margen, margen);
-        tooltip.style.left = `${izquierda}px`;
-        tooltip.style.top = `${arriba}px`;
-      };
-      const ocultar = () => tooltip.classList.remove('is-visible');
-
-      punto.addEventListener('mouseenter', mostrar);
-      punto.addEventListener('mousemove', mover);
-      punto.addEventListener('mouseleave', ocultar);
-      punto.addEventListener('focus', mostrar);
-      punto.addEventListener('blur', ocultar);
-      punto.setAttribute('tabindex', '0');
+    _charts[configuracion.id] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: meses.map(etiquetaMes),
+        datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+          padding: { left: 10, right: 16, top: 4, bottom: 12 }
+        },
+        interaction: { mode: 'nearest', intersect: false },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              color: '#8ba3cc',
+              usePointStyle: true,
+              boxWidth: 7,
+              font: { size: 10 }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: contexto =>
+                ` ${contexto.dataset.label}: ${Number(contexto.raw).toLocaleString('es-AR', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#8ba3cc',
+              font: { size: 9 }
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#8ba3cc', font: { size: 9 } }
+          }
+        }
+      }
     });
   });
+}
+
+function obtenerClaveMesHistorico(valor) {
+  const fecha = parsearFechaParaFiltro(valor);
+  if (!fecha || isNaN(fecha.getTime())) return null;
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatearMesHistorico(clave) {
+  const fecha = new Date(`${clave}-01T00:00:00`);
+  return fecha.toLocaleString('es-AR', { month: 'short', year: 'numeric' });
+}
+
+function obtenerColumnaHistorica(columnas, nombres) {
+  return columnas.find(columna => {
+    const normalizada = normalizarNombreColumna(columna);
+    return nombres.some(nombre => normalizada === normalizarNombreColumna(nombre));
+  });
+}
+
+function renderizarDetalleAsesor(filasFiltradas = []) {
+  const section = document.getElementById('advisor-section');
+  const grid = document.getElementById('advisor-stats-grid');
+  const select = document.getElementById('advisor-select');
+  const title = document.getElementById('advisor-title');
+  if (!section || !grid || !select || !title) return;
+
+  section.style.display = 'block';
+  title.textContent = asesorActivo
+    ? `Detalle de ${asesorActivo} · ${window.filtrosActivos?.proveedor || 'Proveedor'}`
+    : `Detalle por asesor · ${window.filtrosActivos?.proveedor || 'Proveedor'}`;
+
+  const filasParaAsesores = filtrarPorRangoFechas(
+    window.datosGlobales.filas,
+    document.getElementById('date-start')?.value || '',
+    document.getElementById('date-end')?.value || '',
+    window.datosGlobales.columnaMes
+  ).filter(fila => {
+    const proveedor = window.filtrosActivos?.proveedor;
+    const negocio = window.filtrosActivos?.negocio;
+    return (!proveedor || String(fila.Proveedor || '').trim() === String(proveedor).trim()) &&
+      (!negocio || String(fila.Negocio || '').trim() === String(negocio).trim());
+  });
+  const asesores = Array.from(new Set(
+    filasParaAsesores.map(fila => String(fila.Rep || '').trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'es'));
+
+  const valorActual = asesorActivo || '';
+  select.innerHTML = '';
+  const opcionTodos = document.createElement('option');
+  opcionTodos.value = '';
+  opcionTodos.textContent = 'Todos los asesores';
+  select.appendChild(opcionTodos);
+  asesores.forEach(asesor => {
+    const opcion = document.createElement('option');
+    opcion.value = asesor;
+    opcion.textContent = asesor;
+    select.appendChild(opcion);
+  });
+  select.value = asesores.includes(valorActual) ? valorActual : '';
+
+  const metricas = calcularMetricas(filasFiltradas, window.datosGlobales.tipos);
+  renderizarMetricas(metricas, filasFiltradas, {
+    targetId: 'advisor-stats-grid',
+    sectionId: 'advisor-section',
+    vista: 'asesor'
+  });
+}
+
+function calcularLayoutTreemap(items, total) {
+  if (!items.length || !total) return [];
+
+  const resultado = [];
+  const pendientes = items.map(item => ({ ...item }));
+  let x = 0;
+  let y = 0;
+  let width = 1;
+  let height = 1;
+  let restante = total;
+
+  const peorProporcion = (fila, lado, escala) => {
+    const areas = fila.map(item => item.frecuencia * escala);
+    const suma = areas.reduce((totalArea, area) => totalArea + area, 0);
+    const minimo = Math.min(...areas);
+    const maximo = Math.max(...areas);
+    if (!suma || !minimo) return Infinity;
+    return Math.max((lado * lado * maximo) / (suma * suma), (suma * suma) / (lado * lado * minimo));
+  };
+
+  const colocarFila = fila => {
+    const areaFila = fila.reduce((suma, item) => suma + item.frecuencia, 0) / restante * width * height;
+    const horizontal = width < height;
+    if (horizontal) {
+      const filaHeight = areaFila / width;
+      let cursor = x;
+      fila.forEach(item => {
+        const itemWidth = (item.frecuencia / fila.reduce((suma, actual) => suma + actual.frecuencia, 0)) * width;
+        resultado.push({ ...item, x: cursor, y, width: itemWidth, height: filaHeight });
+        cursor += itemWidth;
+      });
+      y += filaHeight;
+      height -= filaHeight;
+    } else {
+      const filaWidth = areaFila / height;
+      let cursor = y;
+      fila.forEach(item => {
+        const itemHeight = (item.frecuencia / fila.reduce((suma, actual) => suma + actual.frecuencia, 0)) * height;
+        resultado.push({ ...item, x, y: cursor, width: filaWidth, height: itemHeight });
+        cursor += itemHeight;
+      });
+      x += filaWidth;
+      width -= filaWidth;
+    }
+    restante -= fila.reduce((suma, item) => suma + item.frecuencia, 0);
+  };
+
+  while (pendientes.length && width > 0 && height > 0) {
+    const fila = [];
+    const lado = Math.min(width, height);
+    const escala = width * height / restante;
+    while (pendientes.length) {
+      const siguiente = pendientes[0];
+      const actual = peorProporcion(fila, lado, escala);
+      const candidato = peorProporcion([...fila, siguiente], lado, escala);
+      if (fila.length === 0 || candidato <= actual) {
+        fila.push(pendientes.shift());
+      } else {
+        break;
+      }
+    }
+    colocarFila(fila);
+  }
+
+  return resultado;
+}
+
+function inicializarHistoricosAsesor(filas, filasHistoricas, meses, columnaMes, columnaPerfil, columnaSupervisor) {
+  const labels = meses.map(formatearMesHistorico);
+  const perfilesPorFrecuencia = new Map();
+  filasHistoricas.forEach(fila => {
+    const perfil = String(fila[columnaPerfil] || '').trim();
+    if (perfil) perfilesPorFrecuencia.set(perfil, (perfilesPorFrecuencia.get(perfil) || 0) + 1);
+  });
+  const perfiles = Array.from(perfilesPorFrecuencia, ([perfil, frecuencia]) => ({ perfil, frecuencia }))
+    .sort((a, b) => b.frecuencia - a.frecuencia || a.perfil.localeCompare(b.perfil, 'es'));
+  const colores = ['#00c2ff', '#00d68f', '#a78bfa', '#ffd600', '#ff4d6a', '#ff9f43'];
+  const treemap = document.getElementById('advisor-profiles-chart');
+  if (treemap) {
+    treemap.innerHTML = '';
+    const totalFrecuencia = perfiles.reduce((total, item) => total + item.frecuencia, 0);
+    const rectangulos = calcularLayoutTreemap(perfiles, totalFrecuencia);
+    rectangulos.forEach(({ perfil, frecuencia, x, y, width, height }, indice) => {
+      const bloque = document.createElement('div');
+      bloque.className = 'advisor-treemap-tile';
+      bloque.style.left = `${x * 100}%`;
+      bloque.style.top = `${y * 100}%`;
+      bloque.style.width = `${width * 100}%`;
+      bloque.style.height = `${height * 100}%`;
+      bloque.style.background = `linear-gradient(135deg, ${colores[indice % colores.length]}dd, ${colores[indice % colores.length]}77)`;
+      bloque.title = `${perfil}: ${frecuencia} apariciones históricas`;
+      bloque.setAttribute('aria-label', `${perfil}: ${frecuencia} apariciones históricas`);
+      bloque.innerHTML = `<strong>${perfil}</strong><span>${frecuencia} ${frecuencia === 1 ? 'vez' : 'veces'}</span>`;
+      treemap.appendChild(bloque);
+    });
+  }
+
+  const supervisores = new Map();
+  filas.forEach((fila) => {
+    const supervisor = String(fila[columnaSupervisor] || '').trim();
+    const mes = obtenerClaveMesHistorico(fila[columnaMes]);
+    if (!supervisor || !mes) return;
+    if (!supervisores.has(supervisor)) {
+      supervisores.set(supervisor, { supervisor, apariciones: 0, meses: new Set() });
+    }
+    const registro = supervisores.get(supervisor);
+    registro.apariciones += 1;
+    registro.meses.add(mes);
+  });
+
+  const filasSupervisores = Array.from(supervisores.values())
+    .sort((a, b) => b.apariciones - a.apariciones || a.supervisor.localeCompare(b.supervisor, 'es'))
+    .map(registro => ({
+      supervisor: registro.supervisor,
+      apariciones: registro.apariciones,
+      meses: Array.from(registro.meses).sort().map(formatearMesHistorico).join(', ')
+    }));
+  renderizarTablaSupervisores(filasSupervisores);
+}
+
+function renderizarTablaSupervisores(filas) {
+  const contenedor = document.getElementById('advisor-supervisors-table');
+  if (!contenedor) return;
+
+  const filasPorPagina = 8;
+  let pagina = 0;
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / filasPorPagina));
+
+  const pintar = () => {
+    const inicio = pagina * filasPorPagina;
+    const visibles = filas.slice(inicio, inicio + filasPorPagina);
+    contenedor.innerHTML = '';
+
+    const tabla = document.createElement('table');
+    tabla.className = 'advisor-supervisors-table';
+    tabla.innerHTML = `
+      <thead><tr><th>Supervisor</th><th>Apariciones</th><th>Meses</th></tr></thead>
+      <tbody></tbody>`;
+    const cuerpo = tabla.querySelector('tbody');
+    visibles.forEach(fila => {
+      const filaTabla = document.createElement('tr');
+      filaTabla.innerHTML = `<td></td><td></td><td></td>`;
+      filaTabla.children[0].textContent = fila.supervisor;
+      filaTabla.children[1].textContent = fila.apariciones.toLocaleString('es-AR');
+      filaTabla.children[2].textContent = fila.meses;
+      cuerpo.appendChild(filaTabla);
+    });
+    contenedor.appendChild(tabla);
+
+    const pie = document.createElement('div');
+    pie.className = 'advisor-table-pagination';
+    pie.innerHTML = `
+      <span> ${filas.length ? inicio + 1 : 0}-${Math.min(inicio + filasPorPagina, filas.length)} de ${filas.length}</span>
+      <div class="advisor-table-actions">
+        <button type="button" class="advisor-page-button" aria-label="Supervisores anteriores">‹</button>
+        <button type="button" class="advisor-page-button" aria-label="Supervisores siguientes">›</button>
+      </div>`;
+    const botones = pie.querySelectorAll('button');
+    botones[0].disabled = pagina === 0;
+    botones[1].disabled = pagina >= totalPaginas - 1;
+    botones[0].addEventListener('click', () => { pagina -= 1; pintar(); });
+    botones[1].addEventListener('click', () => { pagina += 1; pintar(); });
+    contenedor.appendChild(pie);
+  };
+
+  pintar();
 }

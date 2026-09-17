@@ -65,7 +65,9 @@ function mostrarNombreArchivo(nombreArchivo) {
 function mostrarError(mensaje) {
   const el = document.getElementById('error-message');
   const res = document.getElementById('results-section');
+  const advisor = document.getElementById('advisor-section');
   if (res)  res.style.display  = 'none';
+  if (advisor) advisor.style.display = 'none';
   if (!el) return;
   el.textContent    = mensaje;
   el.style.display  = 'block';
@@ -169,9 +171,9 @@ function renderizarFiltrosAdicionales() {
       asesorBtn.type = 'button';
       asesorBtn.textContent = 'Asesor';
       asesorBtn.dataset.provider = p;
-      asesorBtn.setAttribute('aria-label', `Ver detalle por asesor de ${p}`);
+      asesorBtn.setAttribute('aria-label', 'Ver detalle por asesor');
       asesorBtn.addEventListener('click', () => {
-        if (typeof window.abrirVistaAsesor === 'function') window.abrirVistaAsesor(p);
+        if (typeof window.abrirVistaAsesor === 'function') window.abrirVistaAsesor();
       });
       provGroup.appendChild(asesorBtn);
     }
@@ -276,9 +278,10 @@ function renderizarMetricas(metricas, filasFiltradas = [], opciones = {}) {
       </div>`;
   }
 
-  const columnasFiltradas = Array.from(new Set(
-    filasFiltradas.flatMap(fila => Object.keys(fila || {}))
-  ));
+  const columnasFiltradas = Array.from(new Set([
+    ...(window.datosGlobales?.columnas || []),
+    ...filasFiltradas.flatMap(fila => Object.keys(fila || {}))
+  ]));
   const buscarColumna = nombres => columnasFiltradas.find(columna =>
     nombres.some(nombre =>
       normalizarNombreColumna(columna) === normalizarNombreColumna(nombre)
@@ -478,6 +481,7 @@ function renderizarMetricas(metricas, filasFiltradas = [], opciones = {}) {
 
   // Inicializar charts después del render
   setTimeout(() => {
+    if (!grid.isConnected || esVistaAsesor !== (vistaActiva === 'asesor')) return;
     if (esVistaAsesor) {
       const columnasHistoricas = Array.from(new Set(filasFiltradas.flatMap(fila => Object.keys(fila || {}))));
       const columnaMesHistorica = window.datosGlobales?.columnaMes;
@@ -498,8 +502,11 @@ function renderizarMetricas(metricas, filasFiltradas = [], opciones = {}) {
     } else {
       initProfilesChart(filasFiltradas);
     }
-    initQuartileCharts(filasFiltradas, esTecnica);
-    initCharts(metricas, filasFiltradas);
+    initQuartileCharts(filasFiltradas, esTecnica, esVistaAsesor, grid);
+    initCharts(metricas, filasFiltradas, grid);
+    if (esVistaAsesor) {
+      setTimeout(ajustarGraficosAsesor, 120);
+    }
   }, 50);
 
   // Ajustar tamaño del overlay si el texto es muy largo
@@ -570,23 +577,61 @@ function buildChartSection(metricas) {
   return `<div class="charts-row">${cardsHtml}</div>`;
 }
 
-function mostrarSinDatosEnGrafico(elemento) {
+function mostrarMensajeEnGrafico(elemento, texto) {
   if (!elemento) return;
   const contenedor = elemento.parentElement;
   if (!contenedor) return;
   elemento.remove();
   const mensaje = document.createElement('div');
   mensaje.className = 'chart-empty-message';
-  mensaje.textContent = 'El asesor no cuenta con datos de esta métrica';
+  mensaje.textContent = texto;
   contenedor.appendChild(mensaje);
 }
 
-function initCharts(metricas, filasFiltradas = []) {
-  if (typeof Chart === 'undefined') return;
+function mostrarSinDatosEnGrafico(elemento) {
+  mostrarMensajeEnGrafico(elemento, 'El asesor no cuenta con datos de esta métrica');
+}
+
+function parsearValorGrafico(valor) {
+  if (valor === null || valor === undefined || String(valor).trim() === '') {
+    return null;
+  }
+  if (!/\d/.test(String(valor))) {
+    return null;
+  }
+  const numero = parseLocaleNumber(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function prepararCanvasGrafico(canvas) {
+  const contenedor = canvas?.parentElement;
+  if (!contenedor) return false;
+  canvas.style.display = 'block';
+  canvas.width = Math.max(contenedor.clientWidth, 1);
+  canvas.height = Math.max(contenedor.clientHeight, 1);
+  return true;
+}
+
+function ajustarGraficosAsesor() {
+  document.querySelectorAll('#advisor-stats-grid .chart-canvas-wrap canvas').forEach(canvas => {
+    const contenedor = canvas.parentElement;
+    const chart = Object.values(_charts).find(instancia => instancia.canvas === canvas);
+    if (!contenedor || !chart) return;
+    const ancho = Math.round(contenedor.getBoundingClientRect().width);
+    const alto = Math.round(contenedor.getBoundingClientRect().height);
+    if (ancho <= 1 || alto <= 1) return;
+    canvas.width = ancho;
+    canvas.height = alto;
+    chart.resize(ancho, alto);
+    chart.update('none');
+  });
+}
+
+function initCharts(metricas, filasFiltradas = [], root = document) {
   const chartColors = ['#00c2ff', '#00d68f'];
 
   for (let i = 0; i < 2; i++) {
-    const canvas = document.getElementById(`chart-${i}`);
+    const canvas = root.querySelector(`#chart-${i}`);
     if (!canvas) continue;
 
     _destroyChart(`chart-${i}`);
@@ -594,7 +639,10 @@ function initCharts(metricas, filasFiltradas = []) {
     const columna = canvas.dataset.columna;
     // Si no hay columna, intentar tomar del metricas en orden
     let colName = columna || (metricas.filter(m => m.tipo === 'numero')[i] || {}).columna;
-    if (!colName) continue;
+    if (!colName) {
+      mostrarSinDatosEnGrafico(canvas);
+      continue;
+    }
 
     // Construir labels basados en la columna de mes real (normalizando seriales de Excel y strings)
     // Usar exactamente las filas que pasaron los filtros de fecha, proveedor
@@ -644,8 +692,8 @@ function initCharts(metricas, filasFiltradas = []) {
       // No contar celdas vacías como cero: el promedio debe coincidir con el
       // cálculo de la columna en la tabla Perfiles.
       const vals = filas
-        .map(r => parsearNumeroLocale(r[colName]))
-        .filter(n => !isNaN(n));
+        .map(r => parsearValorGrafico(r[colName]))
+        .filter(n => n !== null);
       if (vals.length === 0) return null;
       const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
       return avg;
@@ -669,42 +717,56 @@ function initCharts(metricas, filasFiltradas = []) {
       continue;
     }
 
-    const col = chartColors[i % chartColors.length];
+    if (typeof Chart === 'undefined') {
+      mostrarMensajeEnGrafico(canvas, 'No se pudo cargar el gráfico');
+      continue;
+    }
 
-    _charts[`chart-${i}`] = new Chart(canvas, {
-      type: i === 0 ? 'bar' : 'line',
-      data: {
-        labels,
-        datasets: [{
-          data: valores,
-          borderColor: col,
-          backgroundColor: i === 0 ? `${col}55` : function(ctx){
-            const gradient = ctx.chart.ctx.createLinearGradient(0,0,0,160);
-            gradient.addColorStop(0, `${col}44`);
-            gradient.addColorStop(1, `${col}00`);
-            return gradient;
-          },
-          borderWidth: 2,
-          borderRadius: i === 0 ? 6 : 0,
-          fill: i !== 0,
-          tension: 0.4,
-          pointRadius: 3,
-          pointBackgroundColor: col,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-          padding: { left: 8, right: 16, top: 4, bottom: 12 }
+    const col = chartColors[i % chartColors.length];
+    if (!prepararCanvasGrafico(canvas)) {
+      mostrarMensajeEnGrafico(canvas, 'No se pudo cargar el gráfico');
+      continue;
+    }
+
+    try {
+      _charts[`chart-${i}`] = new Chart(canvas, {
+        type: i === 0 ? 'bar' : 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: valores,
+            borderColor: col,
+            backgroundColor: i === 0 ? `${col}55` : function(ctx){
+              const gradient = ctx.chart.ctx.createLinearGradient(0,0,0,160);
+              gradient.addColorStop(0, `${col}44`);
+              gradient.addColorStop(1, `${col}00`);
+              return gradient;
+            },
+            borderWidth: 2,
+            borderRadius: i === 0 ? 6 : 0,
+            fill: i !== 0,
+            tension: 0.4,
+            pointRadius: 3,
+            pointBackgroundColor: col,
+          }]
         },
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } },
-          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } }
+        options: {
+          responsive: vistaActiva !== 'asesor',
+          maintainAspectRatio: false,
+          layout: {
+            padding: { left: 8, right: 16, top: 4, bottom: 12 }
+          },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } },
+            y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8ba3cc', font: { size: 10 } } }
+          }
         }
-      }
-    });
+      });
+    } catch (error) {
+      console.error(`No se pudo renderizar ${colName}:`, error);
+      mostrarMensajeEnGrafico(canvas, 'No se pudo cargar el gráfico');
+    }
   }
 }
 
@@ -715,9 +777,10 @@ function initProfilesChart(filasFiltradas = []) {
   if (!canvas) return;
   _destroyChart('profiles-chart');
 
-  const columnas = Array.from(new Set(
-    filasFiltradas.flatMap(fila => Object.keys(fila || {}))
-  ));
+  const columnas = Array.from(new Set([
+    ...(window.datosGlobales?.columnas || []),
+    ...filasFiltradas.flatMap(fila => Object.keys(fila || {}))
+  ]));
   const columnaPerfil = columnas.find(
     columna => normalizarNombreColumna(columna).includes('afunilamento')
   );
@@ -819,9 +882,7 @@ function initProfilesChart(filasFiltradas = []) {
   _charts['profiles-chart'].$printLabels = printLabels;
 }
 
-function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
-  if (typeof Chart === 'undefined') return;
-
+function initQuartileCharts(filasFiltradas = [], esTecnica = false, esVistaAsesor = false, root = document) {
   const configuraciones = [
     esTecnica
       ? {
@@ -847,9 +908,10 @@ function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
     Q4: '#ff4d6a'
   };
   const columnaMes = window.datosGlobales ? window.datosGlobales.columnaMes : null;
-  const columnas = Array.from(new Set(
-    filasFiltradas.flatMap(fila => Object.keys(fila || {}))
-  ));
+  const columnas = Array.from(new Set([
+    ...(window.datosGlobales?.columnas || []),
+    ...filasFiltradas.flatMap(fila => Object.keys(fila || {}))
+  ]));
   const buscarColumna = nombre => columnas.find(
     columna => normalizarNombreColumna(columna) === normalizarNombreColumna(nombre)
   );
@@ -867,8 +929,12 @@ function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
   };
 
   configuraciones.forEach(configuracion => {
-    const canvas = document.getElementById(configuracion.id);
-    if (!canvas || !columnaMes) return;
+    const canvas = root.querySelector(`#${configuracion.id}`);
+    if (!canvas) return;
+    if (!columnaMes) {
+      mostrarSinDatosEnGrafico(canvas);
+      return;
+    }
     _destroyChart(configuracion.id);
 
     const columnaValor = buscarColumna(configuracion.columnaValor);
@@ -882,8 +948,8 @@ function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
     filasFiltradas.forEach(fila => {
       const mes = claveMes(fila[columnaMes]);
       const cuartil = String(fila[columnaCuartil] || '').trim().toUpperCase();
-      const valor = parsearNumeroLocale(fila[columnaValor]);
-      if (!mes || !['Q1', 'Q2', 'Q3', 'Q4'].includes(cuartil) || isNaN(valor)) return;
+      const valor = parsearValorGrafico(fila[columnaValor]);
+      if (!mes || !['Q1', 'Q2', 'Q3', 'Q4'].includes(cuartil) || valor === null) return;
 
       const clave = `${mes}|${cuartil}`;
       if (!acumulados.has(clave)) acumulados.set(clave, { suma: 0, cantidad: 0 });
@@ -897,6 +963,14 @@ function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
     )).sort();
     if (meses.length === 0) {
       mostrarSinDatosEnGrafico(canvas);
+      return;
+    }
+    if (typeof Chart === 'undefined') {
+      mostrarMensajeEnGrafico(canvas, 'No se pudo cargar el gráfico');
+      return;
+    }
+    if (!prepararCanvasGrafico(canvas)) {
+      mostrarMensajeEnGrafico(canvas, 'No se pudo cargar el gráfico');
       return;
     }
     const datasets = ['Q1', 'Q2', 'Q3', 'Q4'].map(cuartil => ({
@@ -915,56 +989,61 @@ function initQuartileCharts(filasFiltradas = [], esTecnica = false) {
       hidden: !['Q3', 'Q4'].includes(cuartil)
     }));
 
-    _charts[configuracion.id] = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: meses.map(etiquetaMes),
-        datasets
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-          padding: { left: 10, right: 16, top: 4, bottom: 12 }
+    try {
+      _charts[configuracion.id] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: meses.map(etiquetaMes),
+          datasets
         },
-        interaction: { mode: 'nearest', intersect: false },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              color: '#8ba3cc',
-              usePointStyle: true,
-              boxWidth: 7,
-              font: { size: 10 }
+        options: {
+          responsive: !esVistaAsesor,
+          maintainAspectRatio: false,
+          layout: {
+            padding: { left: 10, right: 16, top: 4, bottom: 12 }
+          },
+          interaction: { mode: 'nearest', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: '#8ba3cc',
+                usePointStyle: true,
+                boxWidth: 7,
+                font: { size: 10 }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: contexto =>
+                  ` ${contexto.dataset.label}: ${Number(contexto.raw).toLocaleString('es-AR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}`
+              }
             }
           },
-          tooltip: {
-            callbacks: {
-              label: contexto =>
-                ` ${contexto.dataset.label}: ${Number(contexto.raw).toLocaleString('es-AR', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}`
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.04)' },
+              ticks: {
+                color: '#8ba3cc',
+                font: { size: 9 }
+              }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(255,255,255,0.04)' },
+              ticks: { color: '#8ba3cc', font: { size: 9 } }
             }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: {
-              color: '#8ba3cc',
-              font: { size: 9 }
-            }
-          },
-          y: {
-            beginAtZero: true,
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: '#8ba3cc', font: { size: 9 } }
           }
         }
-      }
-    });
+      });
+    } catch (error) {
+      console.error(`No se pudo renderizar ${configuracion.id}:`, error);
+      mostrarMensajeEnGrafico(canvas, 'No se pudo cargar el gráfico');
+    }
   });
 }
 
@@ -993,10 +1072,22 @@ function renderizarDetalleAsesor(filasFiltradas = []) {
   const title = document.getElementById('advisor-title');
   if (!section || !grid || !select || !title) return;
 
+  limpiarError();
   section.style.display = 'block';
+  const proveedorActivo = window.filtrosActivos?.proveedor || '';
+  const proveedoresDelAsesor = asesorActivo
+    ? Array.from(new Set(
+        window.datosGlobales.filas
+          .filter(fila => String(fila.Rep || '').trim() === asesorActivo)
+          .map(fila => String(fila.Proveedor || '').trim())
+          .filter(Boolean)
+      )).sort((a, b) => a.localeCompare(b, 'es'))
+    : [];
+  const etiquetaProveedor = proveedorActivo ||
+    (proveedoresDelAsesor.length ? proveedoresDelAsesor.join(' / ') : 'Todos los proveedores');
   title.textContent = asesorActivo
-    ? `Detalle de ${asesorActivo} · ${window.filtrosActivos?.proveedor || 'Proveedor'}`
-    : `Detalle por asesor · ${window.filtrosActivos?.proveedor || 'Proveedor'}`;
+    ? `${asesorActivo} · ${etiquetaProveedor}`
+    : `Detalle por asesor · ${etiquetaProveedor}`;
 
   const filasParaAsesores = filtrarPorRangoFechas(
     window.datosGlobales.filas,

@@ -32,11 +32,10 @@ window.setFiltroNegocio = function(valor) {
   actualizarBotonesFiltro();
 };
 
-window.abrirVistaAsesor = function(proveedor) {
+window.abrirVistaAsesor = function() {
   vistaActiva = 'asesor';
   asesorActivo = '';
   filtrosActivos.asesorDetalle = null;
-  filtrosActivos.proveedor = proveedor;
   window.filtrosActivos = filtrosActivos;
   actualizarVista();
 };
@@ -107,7 +106,7 @@ if (advisorSelect) {
     window.filtrosActivos = filtrosActivos;
     const advisorTitle = document.getElementById('advisor-title');
     if (advisorTitle) {
-      const proveedor = filtrosActivos.proveedor || 'Proveedor';
+      const proveedor = filtrosActivos.proveedor || 'Todos los proveedores';
       advisorTitle.textContent = asesorActivo
         ? `Detalle de ${asesorActivo} · ${proveedor}`
         : `Detalle por asesor · ${proveedor}`;

@@ -85,7 +85,7 @@ function parsearFechaParaFiltro(valor) {
     const fechaUtc = new Date(milisegundos);
     if (isNaN(fechaUtc.getTime())) return null;
 
-    // Devolver medianoche local para compararla con los inputs type="date".
+    // Devolver medianoche local para compararla con los inputs type="month".
     return new Date(
       fechaUtc.getUTCFullYear(),
       fechaUtc.getUTCMonth(),

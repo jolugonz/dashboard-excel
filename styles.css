@@ -342,10 +342,23 @@ body {
 }
 
 .advisor-history-stack {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 10px;
+  display: contents;
+}
+
+.advisor-history-stack .perfiles-chart-card {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-height: 0;
+  height: 100%;
+}
+
+.advisor-history-stack .advisor-history-card {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+#advisor-stats-grid .visual-dashboard-right {
+  grid-row: 1 / span 2;
 }
 
 .advisor-table-container {
@@ -1000,6 +1013,18 @@ body {
   .visual-dashboard-right { grid-column: auto; }
   .profile-chart-wrap { min-height: 340px; }
   .advisor-chart-grid { grid-template-columns: 1fr; }
+  .advisor-history-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .advisor-history-stack .perfiles-chart-card,
+  .advisor-history-stack .advisor-history-card,
+  .visual-dashboard-right {
+    grid-column: auto;
+    grid-row: auto;
+    height: auto;
+  }
 }
 
 @media (max-width: 600px) {
